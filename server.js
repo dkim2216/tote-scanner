@@ -16,47 +16,35 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// 접속 테스트 및 테이블 생성
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) console.error("DB Connection Error:", err);
-  else console.log("DB Connected Successfully");
-});
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
-});
-
-// API 경로들 (기존 로직 유지)
+// API: 모든 작업 목록 가져오기
 app.get("/api/jobs", async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM jobs ORDER BY created_at DESC LIMIT 50');
     res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json([]);
+  }
 });
 
+// API: 새 작업 생성
 app.post("/api/jobs", async (req, res) => {
   const { manifest_no, label, totes } = req.body;
   try {
-    const jobRes = await pool.query('INSERT INTO jobs (manifest_no, label, total_totes) VALUES ($1, $2, $3) RETURNING id', [manifest_no, label, totes.length]);
-    const jobId = jobRes.rows[0].id;
-    for (const t of totes) {
-      await pool.query('INSERT INTO totes (job_id, tote_id, store_id) VALUES ($1, $2, $3)', [jobId, t.toteId, t.storeId]);
-    }
-    res.json({ id: jobId });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const jobRes = await pool.query(
+      'INSERT INTO jobs (manifest_no, label, total_totes) VALUES ($1, $2, $3) RETURNING id',
+      [manifest_no, label, totes.length]
+    );
+    res.json({ id: jobRes.rows[0].id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
-  const { id, mode } = req.params;
-  const { scanned = [], missed = [] } = req.body;
-  try {
-    if (mode === "load") {
-      await pool.query('UPDATE jobs SET load_completed_at=NOW(), load_scanned=$1, load_missed=$2 WHERE id=$3', [scanned.length, missed.length, id]);
-    } else {
-      await pool.query('UPDATE jobs SET offload_completed_at=NOW(), offload_scanned=$1, offload_missed=$2 WHERE id=$3', [scanned.length, missed.length, id]);
-    }
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+// 메인 화면 제공
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

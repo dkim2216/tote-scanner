@@ -41,28 +41,35 @@ const SP = ["#00C8F0","#FFB300","#00E676","#FF6B6B","#A78BFA","#F97316","#34D399
 const gc = (s, a) => SP[Math.max(0, a.indexOf(s)) % SP.length];
 
 const API = {
-  getJobs: async () => { try { const r = await fetch("/api/jobs"); return await r.json(); } catch(e) { return []; } },
+  getJobs: async () => { 
+    try { 
+      const r = await fetch(window.location.origin + "/api/jobs"); 
+      return await r.json(); 
+    } catch(e) { console.error(e); return []; } 
+  },
   createJob: async (no, label, totes) => {
     try {
-      const r = await fetch("/api/jobs", {
+      const r = await fetch(window.location.origin + "/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manifest_no: no, label, totes })
       });
+      if (!r.ok) throw new Error('Network response was not ok');
       return await r.json();
-    } catch(e) { return null; }
+    } catch(e) { console.error(e); return null; }
   },
   completeJob: async (id, mode, scanned, missed) => {
     try {
-      const r = await fetch(`/api/jobs/${id}/complete/${mode}`, {
+      const r = await fetch(window.location.origin + `/api/jobs/${id}/complete/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scanned, missed })
       });
       return await r.json();
-    } catch(e) { return null; }
+    } catch(e) { console.error(e); return null; }
   }
 };
+
 
 const Ring = ({pct, size=80, stroke=6, color=C.accent, label, sub}) => {
   const r = (size-stroke)/2, circ = 2*Math.PI*r, off = circ*(1-pct/100);

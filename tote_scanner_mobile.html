@@ -14,331 +14,103 @@
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;background:#050C18}
-.scan-pulse{animation:pulse 1.6s ease-in-out infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 #00C8F055}50%{box-shadow:0 0 0 14px #00C8F000}}
-.pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1 ) both}
-@keyframes popIn{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
-.store-flash{animation:sf .3s cubic-bezier(.34,1.56,.64,1) both}
-@keyframes sf{from{transform:scale(.84) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
-.slide-up{animation:su .28s ease both}
-@keyframes su{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-.fade-in{animation:fi .3s ease both}
-@keyframes fi{from{opacity:0}to{opacity:1}}
-.btn-tap:active{transform:scale(.91);filter:brightness(1.18)}
-.btn-tap{transition:transform .1s,filter .1s;cursor:pointer}
-::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#1E3050;border-radius:4px}
-input::placeholder{color:#5A7A9A}input:focus{outline:none}
+html,body{height:100%;background:#050C18;color:#E2EAF8;font-family:'Rajdhani',sans-serif}
+#root{height:100%}
+.btn-tap:active{transform:scale(.95 )}
+.btn-tap{transition:transform .1s;cursor:pointer}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-// React 라이브러리에서 필요한 기능들을 안전하게 가져옵니다.
-const { useState, useRef, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useRef } = React;
 
-const SP=["#00C8F0","#FFB300","#00E676","#FF6B6B","#A78BFA","#F97316","#34D399","#FB7185"];
-const gc=(s,a)=>SP[Math.max(0,a.indexOf(s))%SP.length];
-const C={bg:"#0A1628",panel:"#111E30",card:"#162338",border:"#1E3050",accent:"#00C8F0",green:"#00E676",amber:"#FFB300",red:"#FF3D57",text:"#E2EAF8",muted:"#5A7A9A",dim:"#2A4060"};
-const DEMO=[{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store A"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store B"},{toteId:"TOTE-006",storeId:"Store B"},{toteId:"TOTE-007",storeId:"Store C"},{toteId:"TOTE-008",storeId:"Store C"},{toteId:"TOTE-009",storeId:"Store D"},{toteId:"TOTE-010",storeId:"Store D"},{toteId:"WH-A001",storeId:"Store A"},{toteId:"WH-A002",storeId:"Store B"},{toteId:"WH-B001",storeId:"Store C"},{toteId:"WH-B002",storeId:"Store D"},{toteId:"WH-C001",storeId:"Store E"}];
-const IL={upload:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",truck:"M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3M9 21H6a2 2 0 0 1-2-2v-1m15-3h2l2 4v4h-6v-4l2-4zM13 21h6M17 11v6",offload:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",alert:"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",list:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",ok:"M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",barcode:"M4 7V4h3M17 4h3v3M4 17v3h3M17 20h3v-3M7 8v8M10 8v4M13 8v8M16 8v4",history:"M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",settings:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",mail:"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zM22 6l-10 7L2 6",check:"M20 6L9 17l-5-5"};
-const Ico=({d,size=22,color="currentColor"})=>(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>);
+// 테마 색상 정의
+const C = { bg: "#0A1628", panel: "#111E30", card: "#162338", border: "#1E3050", accent: "#00C8F0", green: "#00E676", amber: "#FFB300", red: "#FF3D57", text: "#E2EAF8", muted: "#5A7A9A" };
 
-// API Base URL
-const API_BASE = "/api";
-
-// DB Helpers
-const DB = {
+// API 통신 함수
+const API = {
   getJobs: async () => {
-    try {
-      const res = await fetch(`${API_BASE}/jobs`);
-      return await res.json();
-    } catch (e) { return []; }
+    try { const r = await fetch("/api/jobs"); return await r.json(); } catch(e) { return []; }
   },
-  createJob: async (manifestNo, label, totes) => {
+  createJob: async (no, label, totes) => {
     try {
-      const res = await fetch(`${API_BASE}/jobs`, {
+      const r = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manifest_no: manifestNo, label, totes })
+        body: JSON.stringify({ manifest_no: no, label, totes })
       });
-      return await res.json();
-    } catch (e) { return null; }
-  },
-  completeJob: async (jobId, mode, scanned, missed) => {
-    try {
-      const res = await fetch(`${API_BASE}/jobs/${jobId}/complete/${mode}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scanned, missed })
-      });
-      return await res.json();
-    } catch (e) { return null; }
+      return await r.json();
+    } catch(e) { return null; }
   }
 };
 
-const parseCSV=t=>t.trim().split(/\r?\n/).reduce((a,l)=>{
-  if(!l.trim())return a;
-  const[c1="",c2=""]=l.split(",").map(s=>s.trim());
-  const id=c1.toUpperCase();
-  if(!id||id==="TOTE_ID")return a;
-  a.push({toteId:id,storeId:c2||"Unknown"});return a;
-},[]);
-
-const mkSess=totes=>({toteMap:new Map(totes.map(t=>[t.toteId,t.storeId])),scannedSet:new Set(),log:[],lastScanned:null,completed:false});
-const vrfy=s=>{const not=[...s.toteMap.keys()].filter(id=>!s.scannedSet.has(id)).sort();return{total:s.toteMap.size,scanned:s.scannedSet.size,missing:not.length,notScanned:not.map(id=>({toteId:id,storeId:s.toteMap.get(id)})),complete:not.length===0,pct:s.toteMap.size?Math.round((s.scannedSet.size/s.toteMap.size)*100):0};};
-
-// Shared UI Components
-const Ring=({pct,size=80,stroke=6,color=C.accent,label,sub})=>{const r=(size-stroke)/2,circ=2*Math.PI*r,off=circ*(1-pct/100);return(<div style={{position:"relative",width:size,height:size,flexShrink:0}}><svg width={size} height={size} style={{transform:"rotate(-90deg)"}}><circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.border} strokeWidth={stroke}/><circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={off} style={{transition:"stroke-dashoffset .5s ease"}}/></svg><div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}><span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:size>70?20:14,color:C.text,lineHeight:1}}>{label}</span>{sub&&<span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,marginTop:1}}>{sub}</span>}</div></div>);};
-const Toast=({msg,type,onDone})=>{useEffect(()=>{const t=setTimeout(onDone,2600);return()=>clearTimeout(t)},[]);return(<div className="pop-in" style={{position:"fixed",bottom:72,left:"50%",transform:"translateX(-50%)",background:type==="ok"?C.green:type==="warn"?C.amber:C.red,color:"#0A1628",padding:"10px 20px",borderRadius:24,zIndex:999,fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,boxShadow:"0 8px 32px #0006",whiteSpace:"nowrap",maxWidth:"85vw",textAlign:"center"}}>{msg}</div>);};
-const LogEntry=({e})=>{const cols={ok:C.green,warn:C.amber,error:C.red};return(<div style={{display:"flex",gap:8,alignItems:"flex-start",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,marginTop:2,flexShrink:0}}>{e.time}</span><div style={{flex:1}}><div style={{fontFamily:"'Rajdhani',sans-serif",fontSize:13,color:cols[e.type]||C.text,lineHeight:1.3}}>{e.msg}</div>{e.store&&<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:e.sc||C.accent,marginTop:1}}>{"-> "}{e.store}</div>}</div></div>);};
-const SortCard=({toteId,storeId,color})=>(<div className="store-flash" style={{background:`linear-gradient(135deg,${color}28,${color}08)`,border:`2.5px solid ${color}`,borderRadius:18,padding:"12px 16px",marginBottom:10,textAlign:"center",boxShadow:`0 0 28px ${color}35`}}><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,letterSpacing:4,color,marginBottom:2}}>SORT TO</div><div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:50,color,lineHeight:1,marginBottom:3}}>{storeId}</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.muted}}>{toteId}</div></div>);
-
-// Complete Modal
-const CompleteModal=({mode,session,allStores,manifest,onConfirm,onCancel})=>{
-  const[loading,setLoading]=useState(false);
-  const v=vrfy(session);
-  const go=async()=>{setLoading(true);await onConfirm(mode,v);};
-  return(
-    <div style={{position:"absolute",inset:0,background:"#000c",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}>
-      <div className="pop-in" style={{width:"100%",maxWidth:340,background:C.panel,border:`1px solid ${C.border}`,borderRadius:20,overflow:"hidden",boxShadow:"0 24px 60px #0009"}}>
-        <div style={{padding:"15px 18px 12px",borderBottom:`1px solid ${C.border}`,background:v.missing>0?`${C.amber}18`:`${C.green}18`}}>
-          <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:19,color:v.missing>0?C.amber:C.green}}>{v.missing>0?"Warning: Incomplete Scan":"All Totes Scanned"}</div>
-          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,marginTop:3}}>{mode.toUpperCase()} {"·"} {manifest.manifestNo}</div>
-        </div>
-        <div style={{display:"flex",borderBottom:`1px solid ${C.border}`}}>
-          {[{l:"SCANNED",v:v.scanned,c:C.green},{l:"MISSED",v:v.missing,c:v.missing>0?C.red:C.muted},{l:"TOTAL",v:v.total,c:C.muted}].map((s,i)=>(
-            <div key={s.l} style={{flex:1,padding:"12px 0",textAlign:"center",borderRight:i<2?`1px solid ${C.border}`:""}}>
-              <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:26,color:s.c}}>{s.v}</div>
-              <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>{s.l}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{padding:"13px 16px",display:"flex",gap:10}}>
-          <button onClick={onCancel} disabled={loading} className="btn-tap" style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 0",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.muted}}>BACK</button>
-          <button onClick={go} disabled={loading} className="btn-tap" style={{flex:2,background:loading?C.dim:v.missing>0?C.amber:C.green,border:"none",borderRadius:12,padding:"12px 0",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:"#0A1628",cursor:loading?"wait":"pointer"}}>{loading?"SAVING...":"CONFIRM & SAVE"}</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Manifest Screen
-const ManifestScreen=({manifest,onLoad})=>{
-  const fileRef=useRef();
-  const[filter,setFilter]=useState("ALL");
-  const[manNo,setManNo]=useState(manifest?.manifestNo||"");
-  const stores=manifest?[...new Set(manifest.totes.map(t=>t.storeId))].sort():[];
-  const filtered=manifest?(filter==="ALL"?manifest.totes:manifest.totes.filter(t=>t.storeId===filter)):[];
-  const load=async(totes,label,no)=>onLoad(totes,label,no||manNo.trim()||label);
-  const handleFile=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const rows=parseCSV(ev.target.result);if(!rows.length){alert("No valid data.");return;}load(rows,f.name,manNo.trim()||f.name.replace(".csv",""));};r.readAsText(f);e.target.value="";};
-  return(
-    <div className="fade-in" style={{padding:14,height:"100%",overflowY:"auto",paddingBottom:80}}>
-      <div style={{marginBottom:12}}>
-        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:2,marginBottom:5}}>MANIFEST NUMBER</div>
-        <input value={manNo} onChange={e=>setManNo(e.target.value)} placeholder="e.g.  MAN-2024-001" style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontFamily:"'Share Tech Mono',monospace",fontSize:13,color:C.text,caretColor:C.accent}}/>
-      </div>
-      <div style={{background:`linear-gradient(135deg,${C.card},${C.panel})`,border:`1px solid ${C.border}`,borderRadius:14,padding:15,marginBottom:14,position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:-18,right:-18,width:80,height:80,borderRadius:"50%",background:`${C.accent}10`,border:`1px solid ${C.accent}20`}}/>
-        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:2,marginBottom:4}}>STATUS</div>
-        <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:18,color:C.text,marginBottom:2}}>{manifest?"Manifest Loaded":"No Manifest"}</div>
-        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:manifest?C.green:C.muted}}>{manifest?"● "+manifest.manifestNo+" · "+manifest.totes.length+" totes":"● Enter manifest number then load data"}</div>
-      </div>
-      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:2,marginBottom:10}}>LOAD DATA</div>
-      <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
-      {[{label:"Upload CSV",sub:"tote_id, store_id columns",col:C.amber,icon:IL.upload,act:()=>fileRef.current.click()},{label:"Load Demo Manifest",sub:"15 totes · Stores A-E",col:C.accent,icon:IL.barcode,act:()=>load(DEMO,"DEMO MANIFEST",manNo.trim()||"DEMO-001")}].map(btn=>(
-        <button key={btn.label} className="btn-tap" onClick={btn.act} style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:13,padding:"13px 15px",display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-          <div style={{width:40,height:40,borderRadius:11,background:`${btn.col}18`,border:`1px solid ${btn.col}30`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico d={btn.icon} color={btn.col} size={20}/></div>
-          <div style={{textAlign:"left"}}><div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.text}}>{btn.label}</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>{btn.sub}</div></div>
-          <div style={{marginLeft:"auto",fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:btn.col}}>{"→"}</div>
-        </button>
-      ))}
-      {manifest&&(
-        <div className="slide-up" style={{marginTop:14}}>
-          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:2,marginBottom:8}}>TOTE LIST</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
-            <button className="btn-tap" onClick={()=>setFilter("ALL")} style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${filter==="ALL"?C.accent:C.border}`,background:filter==="ALL"?`${C.accent}20`:C.card,fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:11,color:filter==="ALL"?C.accent:C.muted}}>ALL ({manifest.totes.length})</button>
-            {stores.map(s=>{const col=gc(s,stores),cnt=manifest.totes.filter(t=>t.storeId===s).length;return(<button key={s} className="btn-tap" onClick={()=>setFilter(s)} style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${filter===s?col:C.border}`,background:filter===s?`${col}25`:C.card,fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:11,color:filter===s?col:C.muted}}>{s} ({cnt})</button>);})}
-          </div>
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
-            <div style={{padding:"7px 13px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:2}}><span>TOTE ID</span><span>STORE</span></div>
-            <div style={{maxHeight:190,overflowY:"auto"}}>
-              {filtered.map((t,idx)=>{const col=gc(t.storeId,stores);return(<div key={t.toteId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 13px",borderBottom:idx<filtered.length-1?`1px solid ${C.border}`:"none"}}><span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:C.text}}>{t.toteId}</span><span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:600,fontSize:11,color:col,background:`${col}18`,padding:"2px 9px",borderRadius:20,border:`1px solid ${col}40`}}>{t.storeId}</span></div>);})}
-            </div>
-          </div>
-          <button className="btn-tap" onClick={()=>{onLoad(null,null,null);setManNo("");setFilter("ALL");}} style={{width:"100%",marginTop:9,background:`${C.red}18`,border:`1px solid ${C.red}40`,borderRadius:12,padding:"10px",color:C.red,fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13}}>CLEAR MANIFEST</button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Scan Screen
-const ScanScreen=({mode,session,allStores,onScan,onCompleteRequest})=>{
-  const[val,setVal]=useState("");const ref=useRef(),logRef=useRef();
-  const total=session.toteMap.size,scanned=session.scannedSet.size,pct=total?Math.round((scanned/total)*100):0;
-  const col=mode==="load"?C.accent:C.amber;
-  useEffect(()=>{ref.current?.focus();},[]);
-  useEffect(()=>{if(logRef.current)logRef.current.scrollTop=logRef.current.scrollHeight;},[session.log]);
-  const go=()=>{const id=val.trim().toUpperCase();if(!id)return;onScan(id);setVal("");ref.current?.focus();};
-  return(
-    <div style={{display:"flex",flexDirection:"column",height:"100%",padding:"12px 14px 0"}}>
-      <div style={{display:"flex",gap:10,marginBottom:10}}>
-        <Ring pct={pct} size={68} color={col} label={pct+"%"} sub={scanned+"/"+total}/>
-        <div style={{flex:1,display:"flex",flexDirection:"column",gap:5}}>
-          <div style={{display:"flex",justifyContent:"space-between"}}>
-            {[{l:"SCANNED",v:scanned,c:C.green},{l:"LEFT",v:total-scanned,c:col},{l:"TOTAL",v:total,c:C.muted}].map(s=>(<div key={s.l} style={{textAlign:"center"}}><div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:20,color:s.c}}>{s.v}</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>{s.l}</div></div>))}
-          </div>
-          <div style={{height:5,borderRadius:4,background:C.border,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",borderRadius:4,background:`linear-gradient(90deg,${col},${C.green})`,transition:"width .5s ease"}}/></div>
-          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:session.completed?C.green:C.muted}}>{session.completed?"✓ COMPLETED & SAVED":"● "+mode.toUpperCase()+"ING"}</div>
-        </div>
-      </div>
-      {mode==="offload"&&session.lastScanned&&(<SortCard key={session.lastScanned.ts} toteId={session.lastScanned.toteId} storeId={session.lastScanned.storeId} color={gc(session.lastScanned.storeId,allStores)}/>)}
-      <div className={session.completed?"":"scan-pulse"} style={{background:C.card,border:`2px solid ${session.completed?C.dim:col}`,borderRadius:13,padding:"10px 13px",marginBottom:8,display:"flex",alignItems:"center",gap:10,transition:"border-color .3s"}}>
-        <Ico d={IL.barcode} color={session.completed?C.muted:col} size={20}/>
-        <input ref={ref} value={val} onChange={e=>setVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder={session.completed?"Session complete":"Scan or type tote ID..."} disabled={session.completed||!total} style={{flex:1,background:"transparent",border:"none",fontFamily:"'Share Tech Mono',monospace",fontSize:14,color:C.text,caretColor:col}}/>
-        {val&&!session.completed&&(<button className="btn-tap" onClick={go} style={{background:col,border:"none",borderRadius:8,padding:"6px 14px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,color:"#0A1628"}}>GO</button>)}
-      </div>
-      <div ref={logRef} style={{flex:1,overflowY:"auto",marginBottom:8}}>
-        {session.log.length===0?<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.muted,textAlign:"center",paddingTop:20}}>Scan log will appear here</div>:[...session.log].reverse().map((e,i)=><LogEntry key={i} e={e}/>)}
-      </div>
-      {!session.completed&&total>0&&(<button className="btn-tap" onClick={onCompleteRequest} style={{width:"100%",marginBottom:4,border:"none",borderRadius:13,padding:"13px",background:scanned===total?`linear-gradient(135deg,${C.green},${C.accent})`:`linear-gradient(135deg,${col}90,${col}44)`,fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:scanned===total?"#0A1628":C.text}}>COMPLETE {mode.toUpperCase()}</button>)}
-    </div>
-  );
-};
-
-// History Screen
-const HistoryScreen = () => {
+function App() {
+  const [tab, setTab] = useState("manifest");
   const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  // 앱 시작 시 DB에서 데이터 가져오기 테스트
   useEffect(() => {
-    let isMounted = true;
-    const fetchJobs = async () => {
-      try {
-        const data = await DB.getJobs();
-        if (isMounted) setJobs(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
+    const load = async () => {
+      setLoading(true);
+      const data = await API.getJobs();
+      setJobs(data);
+      setLoading(false);
     };
-    fetchJobs();
-    return () => { isMounted = false; };
+    load();
   }, []);
-  if (loading) return <div style={{color:C.muted, padding:20, textAlign:"center", fontFamily:"'Share Tech Mono',monospace"}}>Loading history from Neon DB...</div>;
+
   return (
-    <div className="fade-in" style={{padding:14, height:"100%", overflowY:"auto", paddingBottom:80}}>
-      {jobs.length === 0 ? (
-        <div style={{textAlign:"center", color:C.muted, marginTop:40}}>No history found in DB</div>
-      ) : (
-        jobs.map(j => (
-          <div key={j.id} style={{background:C.card, borderRadius:14, padding:15, marginBottom:10, border:`1px solid ${C.border}`}}>
-            <div style={{display:"flex", justifyContent:"space-between", marginBottom:8}}>
-              <span style={{fontFamily:"'Rajdhani',sans-serif", fontWeight:700, color:C.accent}}>{j.manifest_no}</span>
-              <span style={{fontFamily:"'Share Tech Mono',monospace", fontSize:10, color:C.muted}}>{new Date(j.created_at).toLocaleDateString()}</span>
-            </div>
-            <div style={{display:"flex", gap:10}}>
-              <div style={{flex:1, background:C.panel, padding:8, borderRadius:8, textAlign:"center"}}>
-                <div style={{fontSize:18, fontWeight:700, color:C.green}}>{j.load_scanned || 0}</div>
-                <div style={{fontSize:9, color:C.muted}}>LOADED</div>
-              </div>
-              <div style={{flex:1, background:C.panel, padding:8, borderRadius:8, textAlign:"center"}}>
-                <div style={{fontSize:18, fontWeight:700, color:C.amber}}>{j.offload_scanned || 0}</div>
-                <div style={{fontSize:9, color:C.muted}}>OFFLOADED</div>
-              </div>
-            </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg }}>
+      {/* 헤더 */}
+      <div style={{ background: C.panel, padding: "15px", textAlign: "center", borderBottom: `1px solid ${C.border}` }}>
+        <h2 style={{ color: C.accent, letterSpacing: "2px" }}>TOTE SCANNER v2</h2>
+      </div>
+
+      {/* 메인 컨텐츠 */}
+      <div style={{ flex: 1, padding: "20px", overflowY: "auto" }}>
+        {tab === "manifest" && (
+          <div>
+            <h3 style={{ marginBottom: "15px" }}>Manifest Load</h3>
+            <button 
+              className="btn-tap"
+              onClick={() => alert("Demo Load Clicked")}
+              style={{ width: "100%", padding: "15px", background: C.accent, border: "none", borderRadius: "10px", fontWeight: "bold" }}
+            >
+              LOAD DEMO DATA
+            </button>
           </div>
-        ))
-      )}
+        )}
+
+        {tab === "history" && (
+          <div>
+            <h3 style={{ marginBottom: "15px" }}>History (Neon DB)</h3>
+            {loading ? <p>Loading...</p> : (
+              jobs.length === 0 ? <p style={{color:C.muted}}>No data in DB</p> : 
+              jobs.map(j => (
+                <div key={j.id} style={{ background: C.card, padding: "15px", borderRadius: "10px", marginBottom: "10px", border: `1px solid ${C.border}` }}>
+                  <div style={{ fontWeight: "bold", color: C.accent }}>{j.manifest_no}</div>
+                  <div style={{ fontSize: "12px", color: C.muted }}>{new Date(j.created_at).toLocaleString()}</div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 하단 네비게이션 */}
+      <div style={{ display: "flex", background: C.panel, borderTop: `1px solid ${C.border}` }}>
+        <button onClick={() => setTab("manifest")} style={{ flex: 1, padding: "15px", background: "none", border: "none", color: tab === "manifest" ? C.accent : C.muted }}>MANIFEST</button>
+        <button onClick={() => setTab("history")} style={{ flex: 1, padding: "15px", background: "none", border: "none", color: tab === "history" ? C.accent : C.muted }}>HISTORY</button>
+      </div>
     </div>
   );
-};
-
-// Nav
-const NAV=[{id:"manifest",l:"MANIFEST",i:IL.list},{id:"load",l:"LOAD",i:IL.truck},{id:"offload",l:"OFFLOAD",i:IL.offload},{id:"history",l:"HISTORY",i:IL.history}];
-const Nav=({active,onSelect,ldone,odone})=>(<div style={{position:"absolute",bottom:0,left:0,right:0,background:C.panel,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100,paddingBottom:2}}>{NAV.map(item=>{const on=active===item.id,dot=(item.id==="load"&&ldone)||(item.id==="offload"&&odone);return(<button key={item.id} onClick={()=>onSelect(item.id)} className="btn-tap" style={{flex:1,background:"transparent",border:"none",padding:"8px 0 3px",display:"flex",flexDirection:"column",alignItems:"center",gap:2,position:"relative"}}>{dot&&<div style={{position:"absolute",top:6,right:"calc(50% - 11px)",width:6,height:6,borderRadius:"50%",background:C.green,boxShadow:`0 0 6px ${C.green}`}}/>}<svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={on?C.accent:C.muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={item.i}/></svg><span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:8,color:on?C.accent:C.muted,letterSpacing:.3}}>{item.l}</span>{on&&<div style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:16,height:2,borderRadius:2,background:C.accent}}/>}</button>);})}</div>);
-const NoManifest=({go})=>(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:12,padding:24}}><Ico d={IL.alert} color={C.muted} size={40}/><div style={{fontFamily:"'Rajdhani',sans-serif",fontSize:17,color:C.muted,textAlign:"center"}}>No manifest loaded</div><button className="btn-tap" onClick={go} style={{background:C.accent,border:"none",borderRadius:12,padding:"11px 24px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:"#0A1628"}}>GO TO MANIFEST</button></div>);
-
-// Root App
-function App(){
-  const[tab,setTab]=useState("manifest");
-  const[manifest,setManifest]=useState(null);
-  const[currentJobId,setCurrentJobId]=useState(null);
-  const[lSess,setLSess]=useState(null);
-  const[oSess,setOSess]=useState(null);
-  const[toast,setToast]=useState(null);
-  const[modal,setModal]=useState(null);
-  const showToast=(msg,type="ok")=>setToast({msg,type,key:Date.now()});
-  const allStores=useMemo(()=>manifest?[...new Set(manifest.totes.map(t=>t.storeId))].sort():[],[manifest]);
-  const titles={manifest:"Data Source",load:"Loading Scan",offload:"Offload & Sort",history:"Job History"};
-
-  const loadManifest=async(totes,label,no)=>{
-    if(!totes){setManifest(null);setLSess(null);setOSess(null);setCurrentJobId(null);return;}
-    const jobData = await DB.createJob(no, label, totes);
-    if (jobData && jobData.id) {
-      setCurrentJobId(jobData.id);
-      setManifest({totes,label,manifestNo:no});setLSess(mkSess(totes));setOSess(mkSess(totes));showToast(totes.length+" totes loaded to DB");
-    } else {
-      showToast("Failed to create job in DB", "error");
-    }
-  };
-
-  const scan=(mode)=>(toteId)=>{
-    const sess=mode==="load"?lSess:oSess,setSess=mode==="load"?setLSess:setOSess;
-    if(!sess||sess.completed)return;
-    const id=toteId.toUpperCase(),time=new Date().toLocaleTimeString("en-GB",{hour12:false}),storeId=sess.toteMap.get(id);
-    if(!storeId){setSess(s=>({...s,log:[...s.log,{time,msg:"NOT IN MANIFEST: "+id,type:"error"}]}));showToast("Not in manifest","error");return;}
-    if(sess.scannedSet.has(id)){setSess(s=>({...s,log:[...s.log,{time,msg:"DUPLICATE: "+id,type:"warn"}]}));showToast("Already scanned","warn");return;}
-    const nset=new Set(sess.scannedSet);nset.add(id);
-    const rem=sess.toteMap.size-nset.size,color=gc(storeId,allStores);
-    setSess(s=>({...s,scannedSet:nset,lastScanned:{toteId:id,storeId,ts:Date.now()},log:[...s.log,{time,msg:"OK "+id+"  · "+rem+" remaining",store:storeId,sc:color,type:"ok"}]}));
-    if(rem===0)showToast("All totes scanned!","ok");
-  };
-
-  const confirmComplete=async(mode,v)=>{
-    const sess=mode==="load"?lSess:oSess,setSess=mode==="load"?setLSess:setOSess;
-    const scannedTotes = [...sess.scannedSet].map(id => ({toteId: id, storeId: sess.toteMap.get(id)}));
-    const result = await DB.completeJob(currentJobId, mode, scannedTotes, v.notScanned);
-    if (result && result.success) {
-      setSess(s=>({...s,completed:true}));
-      setModal(null);
-      showToast("Saved to Neon DB", "ok");
-    } else {
-      showToast("Failed to save to DB", "error");
-    }
-  };
-
-  const content=(
-    <>
-      <div style={{background:C.panel,padding:"9px 18px 7px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`}}>
-        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted}}>{new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span>
-        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,color:C.accent,letterSpacing:2}}>TOTE SCANNER</span>
-        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted}}>v2.0</span>
-      </div>
-      <div style={{padding:"8px 18px 6px",background:C.panel,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div>
-          <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:17,color:C.text}}>{titles[tab]}</div>
-          {manifest&&<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.accent}}>{manifest.manifestNo+" · "+manifest.totes.length+" totes"}</div>}
-        </div>
-        {manifest&&<div style={{width:7,height:7,borderRadius:"50%",background:C.green,boxShadow:`0 0 8px ${C.green}`}}/>}
-      </div>
-      <div style={{flex:1,overflow:"hidden",position:"relative"}}>
-        {tab==="manifest"&&<ManifestScreen manifest={manifest} onLoad={loadManifest}/>}
-        {tab==="load"&&(lSess?<ScanScreen mode="load" session={lSess} allStores={allStores} onScan={scan("load")} onCompleteRequest={()=>setModal("load")}/>:<NoManifest go={()=>setTab("manifest")}/>)}
-        {tab==="offload"&&(oSess?<ScanScreen mode="offload" session={oSess} allStores={allStores} onScan={scan("offload")} onCompleteRequest={()=>setModal("offload")}/>:<NoManifest go={()=>setTab("manifest")}/>)}
-        {tab==="history"&&<HistoryScreen/>}
-        {modal&&manifest&&(modal==="load"?lSess:oSess)&&(<CompleteModal mode={modal} session={modal==="load"?lSess:oSess} allStores={allStores} manifest={manifest} onConfirm={confirmComplete} onCancel={()=>setModal(null)}/>)}
-      </div>
-      <Nav active={tab} onSelect={setTab} ldone={lSess?.completed} odone={oSess?.completed}/>
-      {toast&&<Toast key={toast.key} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-    </>
-  );
-  return (<div style={{width:"100%",height:"100vh",background:C.bg,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>{content}</div>);
 }
+
+// 앱 실행
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App/>);
+root.render(<App />);
 </script>
 </body>
 </html>

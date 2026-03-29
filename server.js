@@ -28,7 +28,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// DB 테이블 생성 (상세 기록용 테이블 추가)
+// DB 테이블 생성
 const initDB = async () => {
   try {
     await pool.query(`
@@ -61,7 +61,7 @@ const initDB = async () => {
         store_id TEXT
       );
     `);
-    console.log("DB Tables Ready with detailed records");
+    console.log("DB Tables Ready");
   } catch (err) {
     console.error("DB Init Error:", err);
   }
@@ -90,29 +90,30 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
   const { id, mode } = req.params;
   const { scanned = [], missed = [] } = req.body;
   try {
-    // 1. DB 업데이트 (요약 정보)
+    // 1. DB 업데이트
     if (mode === "load") {
       await pool.query('UPDATE jobs SET load_completed_at=NOW(), load_scanned=$1, load_missed=$2 WHERE id=$3', [scanned.length, missed.length, id]);
     } else {
       await pool.query('UPDATE jobs SET offload_completed_at=NOW(), offload_scanned=$1, offload_missed=$2 WHERE id=$3', [scanned.length, missed.length, id]);
     }
 
-    // 2. 상세 기록 저장 (스캔된 것들)
+    // 2. 상세 기록 저장
     for (const t of scanned) {
       await pool.query('INSERT INTO scan_records (job_id, mode, tote_id, store_id) VALUES ($1, $2, $3, $4)', [id, mode, t.toteId, t.storeId]);
     }
-
-    // 3. 상세 기록 저장 (누락된 것들)
     for (const t of missed) {
       await pool.query('INSERT INTO missed_records (job_id, mode, tote_id, store_id) VALUES ($1, $2, $3, $4)', [id, mode, t.toteId, t.storeId]);
     }
 
-    // 4. 이메일 발송 시도
-    if (process.env.SMTP_USER && process.env.ADMIN_EMAIL) {
+    // 3. 이메일 발송 시도 및 상세 로그 남기기
+    console.log(`Attempting to send email for Job ${id} (${mode})...`);
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.ADMIN_EMAIL) {
+      console.warn("Email skipped: Missing SMTP environment variables (SMTP_USER, SMTP_PASS, or ADMIN_EMAIL)");
+    } else {
       const mailOptions = {
         from: `"Tote Scanner" <${process.env.SMTP_USER}>`,
         to: process.env.ADMIN_EMAIL,
-        subject: `[Tote Scanner] ${mode.toUpperCase()} Complete - ${id}`,
+        subject: `[Tote Scanner] ${mode.toUpperCase()} Complete - Job #${id}`,
         html: `
           <h2>Operation Complete: ${mode.toUpperCase()}</h2>
           <p><b>Job ID:</b> ${id}</p>
@@ -126,8 +127,14 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
           </ul>
         `
       };
-      await transporter.sendMail(mailOptions);
-      console.log("Email sent successfully to", process.env.ADMIN_EMAIL);
+      
+      try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log("Email sent successfully:", info.messageId);
+      } catch (mailErr) {
+        console.error("Email sending failed! Error details:", mailErr.message);
+        console.error("Full error stack:", mailErr.stack);
+      }
     }
 
     res.json({ success: true });

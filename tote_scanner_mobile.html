@@ -18,7 +18,7 @@ html,body{height:100%;background:#050C18;color:#E2EAF8;font-family:'Rajdhani',sa
 #root{height:100%;display:flex;flex-direction:column}
 .scan-pulse{animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #00C8F055}50%{box-shadow:0 0 0 14px #00C8F000}}
-.pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1) both}
+.pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1 ) both}
 @keyframes popIn{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
 .store-flash{animation:sf .3s cubic-bezier(.34,1.56,.64,1) both}
 @keyframes sf{from{transform:scale(.84) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
@@ -29,6 +29,7 @@ input:focus{outline:none}
 .nav-tab{flex:1;padding:12px 0;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;color:#5A7A9A;font-weight:bold;font-size:10px;font-family:'Share Tech Mono',monospace}
 .nav-tab.active{color:#00C8F0}
 .nav-tab.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#00C8F0;border-radius:0 0 4px 4px}
+.list-item{background:#162338;padding:12px;border-radius:10px;border:1px solid #1E3050;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 </style>
 </head>
 <body>
@@ -116,6 +117,22 @@ function App() {
     setLoading(false);
   };
 
+  const handleCSV = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      const lines = text.split('\n').filter(l => l.trim());
+      const totes = lines.slice(1).map(l => {
+        const [toteId, storeId] = l.split(',').map(s => s.trim());
+        return { toteId, storeId };
+      });
+      loadManifest(totes, file.name, file.name.split('.')[0]);
+    };
+    reader.readAsText(file);
+  };
+
   const handleScan = (mode) => {
     const id = scanInput.trim().toUpperCase();
     if (!id || !manifest) return;
@@ -161,6 +178,8 @@ function App() {
     }
   }, [tab]);
 
+  const currentSess = tab === "load" ? lSess : oSess;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg }}>
       {/* Header */}
@@ -175,15 +194,16 @@ function App() {
         {tab === "manifest" && (
           <div className="fade-in">
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>MANIFEST NUMBER</div>
-              <input value={manNo} onChange={e => setManNo(e.target.value)} placeholder="e.g. MAN-2024-001" style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px", color: "white", fontSize: 14 }} />
+              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>UPLOAD MANIFEST CSV</div>
+              <label className="btn-tap" style={{ display: "block", width: "100%", padding: "16px", background: C.card, border: `2px dashed ${C.border}`, borderRadius: 12, textAlign: "center", cursor: "pointer" }}>
+                <span style={{ color: C.accent, fontWeight: "bold" }}>SELECT CSV FILE</span>
+                <input type="file" accept=".csv" onChange={handleCSV} style={{ display: "none" }} />
+              </label>
             </div>
-            <button className="btn-tap" onClick={() => loadManifest([{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}], "Demo", manNo || "DEMO-001")} style={{ width: "100%", padding: "16px", background: C.accent, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628", marginBottom: 15 }}>LOAD DEMO MANIFEST</button>
+            <div style={{ textAlign: "center", color: C.muted, fontSize: 12, marginBottom: 20 }}>OR</div>
+            <button className="btn-tap" onClick={() => loadManifest([{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}], "Demo", "DEMO-001")} style={{ width: "100%", padding: "16px", background: C.accent, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628", marginBottom: 15 }}>LOAD DEMO MANIFEST</button>
             {manifest && (
-              <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: 12, border: `1px solid ${C.border}`, marginTop: 10 }}>
-                <div style={{ color: C.green, fontWeight: "bold" }}>● Manifest Active: {manNo || "DEMO-001"}</div>
-                <div style={{ fontSize: "13px", color: C.muted, marginTop: 5 }}>{manifest.length} Totes Loaded to Neon DB</div>
-              </div>
+              <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: 12, border: `1px solid ${C.border}`, color: C.green, fontWeight: "bold" }}>● Manifest Active: {manNo || "ACTIVE"}</div>
             )}
           </div>
         )}
@@ -193,22 +213,22 @@ function App() {
             {!manifest ? <div style={{ textAlign: "center", marginTop: 50, color: C.muted }}>No manifest loaded</div> : (
               <>
                 <div style={{ display: "flex", gap: 15, marginBottom: 20 }}>
-                  <Ring pct={Math.round(((tab === "load" ? lSess : oSess).scanned.size / manifest.length) * 100)} color={tab === "load" ? C.accent : C.amber} label={Math.round(((tab === "load" ? lSess : oSess).scanned.size / manifest.length) * 100) + "%"} sub={(tab === "load" ? lSess : oSess).scanned.size + "/" + manifest.length} />
+                  <Ring pct={Math.round((currentSess.scanned.size / manifest.length) * 100)} color={tab === "load" ? C.accent : C.amber} label={Math.round((currentSess.scanned.size / manifest.length) * 100) + "%"} sub={currentSess.scanned.size + "/" + manifest.length} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 18, color: C.text }}>{tab.toUpperCase()} SCANNING</div>
-                    <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 10, color: (tab === "load" ? lSess : oSess).completed ? C.green : C.muted }}>{(tab === "load" ? lSess : oSess).completed ? "✓ COMPLETED" : "● IN PROGRESS"}</div>
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>{tab.toUpperCase()} SCANNING</div>
+                    <div style={{ fontSize: 10, color: currentSess.completed ? C.green : C.muted }}>{currentSess.completed ? "✓ COMPLETED" : "● IN PROGRESS"}</div>
                   </div>
                 </div>
 
                 {tab === "offload" && oSess.last && <SortCard toteId={oSess.last.id} storeId={oSess.last.store} color={oSess.last.color} />}
 
-                <div className={(tab === "load" ? lSess : oSess).completed ? "" : "scan-pulse"} style={{ background: C.card, border: `2px solid ${tab === "load" ? C.accent : C.amber}`, borderRadius: 12, padding: "12px", display: "flex", gap: 10, marginBottom: 15 }}>
-                  <input value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleScan(tab)} disabled={(tab === "load" ? lSess : oSess).completed} placeholder="Scan Tote ID..." style={{ flex: 1, background: "none", border: "none", color: "white", fontSize: 15 }} />
+                <div className={currentSess.completed ? "" : "scan-pulse"} style={{ background: C.card, border: `2px solid ${tab === "load" ? C.accent : C.amber}`, borderRadius: 12, padding: "12px", display: "flex", gap: 10, marginBottom: 15 }}>
+                  <input value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleScan(tab)} disabled={currentSess.completed} placeholder="Scan Tote ID..." style={{ flex: 1, background: "none", border: "none", color: "white", fontSize: 15 }} />
                   <button onClick={() => handleScan(tab)} style={{ background: tab === "load" ? C.accent : C.amber, border: "none", padding: "6px 15px", borderRadius: 8, fontWeight: "bold" }}>GO</button>
                 </div>
 
                 <div ref={logRef} style={{ flex: 1, overflowY: "auto", marginBottom: 15 }}>
-                  {(tab === "load" ? lSess : oSess).log.map((l, i) => (
+                  {currentSess.log.map((l, i) => (
                     <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
                       <span style={{ fontSize: 9, color: C.muted }}>{l.time}</span>
                       <div style={{ flex: 1 }}>
@@ -219,7 +239,7 @@ function App() {
                   ))}
                 </div>
 
-                {!(tab === "load" ? lSess : oSess).completed && (
+                {!currentSess.completed && (
                   <button className="btn-tap" onClick={() => completeJob(tab)} disabled={loading} style={{ width: "100%", padding: "16px", background: C.green, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628" }}>{loading ? "SAVING..." : "COMPLETE " + tab.toUpperCase()}</button>
                 )}
               </>
@@ -227,9 +247,32 @@ function App() {
           </div>
         )}
 
+        {tab === "verify" && (
+          <div className="fade-in">
+            {!manifest ? <div style={{ textAlign: "center", marginTop: 50, color: C.muted }}>No manifest loaded</div> : (
+              <>
+                <h3 style={{ fontSize: 12, color: C.muted, marginBottom: 15, letterSpacing: 2 }}>SCANNED LIST ({currentSess.scanned.size})</h3>
+                {manifest.filter(t => currentSess.scanned.has(t.toteId)).map(t => (
+                  <div key={t.toteId} className="list-item">
+                    <span style={{ fontWeight: "bold" }}>{t.toteId}</span>
+                    <span style={{ color: C.accent, fontSize: 12 }}>{t.storeId}</span>
+                  </div>
+                ))}
+                <h3 style={{ fontSize: 12, color: C.red, marginTop: 25, marginBottom: 15, letterSpacing: 2 }}>MISSED LIST ({manifest.length - currentSess.scanned.size})</h3>
+                {manifest.filter(t => !currentSess.scanned.has(t.toteId)).map(t => (
+                  <div key={t.toteId} className="list-item" style={{ borderColor: C.red + "44" }}>
+                    <span style={{ fontWeight: "bold", color: C.red }}>{t.toteId}</span>
+                    <span style={{ color: C.muted, fontSize: 12 }}>{t.storeId}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
         {tab === "history" && (
           <div className="fade-in">
-            <h3 style={{ marginBottom: 15, color: C.muted, fontSize: 12, letterSpacing: 2 }}>NEON DB HISTORY</h3>
+            <h3 style={{ fontSize: 12, color: C.muted, marginBottom: 15, letterSpacing: 2 }}>NEON DB HISTORY</h3>
             {jobs.map(j => (
               <div key={j.id} style={{ background: C.card, padding: "15px", borderRadius: 12, marginBottom: 10, border: `1px solid ${C.border}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -258,10 +301,11 @@ function App() {
           {id: "manifest", label: "MANIFEST"},
           {id: "load", label: "LOAD"},
           {id: "offload", label: "OFFLOAD"},
+          {id: "verify", label: "VERIFY"},
           {id: "history", label: "HISTORY"}
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} className={`nav-tab ${tab === t.id ? 'active' : ''}`}>
-            <div style={{ fontSize: 10 }}>{t.label}</div>
+            <div style={{ fontSize: 9 }}>{t.label}</div>
           </button>
         ))}
       </div>

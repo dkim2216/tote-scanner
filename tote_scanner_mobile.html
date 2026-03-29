@@ -216,17 +216,24 @@ const ScanScreen=({mode,session,allStores,onScan,onCompleteRequest})=>{
 
 // History Screen
 const HistoryScreen = () => {
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
+  const [jobs, setJobs] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
     const fetchJobs = async () => {
-      const data = await DB.getJobs();
-      setJobs(data);
-      setLoading(false);
+      try {
+        const data = await DB.getJobs();
+        setJobs(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchJobs();
   }, []);
+
   if (loading) return <div style={{color:C.muted, padding:20, textAlign:"center", fontFamily:"'Share Tech Mono',monospace"}}>Loading history from Neon DB...</div>;
+
   return (
     <div className="fade-in" style={{padding:14, height:"100%", overflowY:"auto", paddingBottom:80}}>
       {jobs.length === 0 ? (
@@ -240,11 +247,11 @@ const HistoryScreen = () => {
             </div>
             <div style={{display:"flex", gap:10}}>
               <div style={{flex:1, background:C.panel, padding:8, borderRadius:8, textAlign:"center"}}>
-                <div style={{fontSize:18, fontWeight:700, color:C.green}}>{j.load_scanned}</div>
+                <div style={{fontSize:18, fontWeight:700, color:C.green}}>{j.load_scanned || 0}</div>
                 <div style={{fontSize:9, color:C.muted}}>LOADED</div>
               </div>
               <div style={{flex:1, background:C.panel, padding:8, borderRadius:8, textAlign:"center"}}>
-                <div style={{fontSize:18, fontWeight:700, color:C.amber}}>{j.offload_scanned}</div>
+                <div style={{fontSize:18, fontWeight:700, color:C.amber}}>{j.offload_scanned || 0}</div>
                 <div style={{fontSize:9, color:C.muted}}>OFFLOADED</div>
               </div>
             </div>
@@ -254,6 +261,7 @@ const HistoryScreen = () => {
     </div>
   );
 };
+
 
 // Nav
 const NAV=[{id:"manifest",l:"MANIFEST",i:IL.list},{id:"load",l:"LOAD",i:IL.truck},{id:"offload",l:"OFFLOAD",i:IL.offload},{id:"history",l:"HISTORY",i:IL.history}];

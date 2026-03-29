@@ -20,6 +20,11 @@ app.use(express.json());
 // Serve the mobile HTML from the same folder
 app.use(express.static(__dirname));
 
+// 주소만 입력했을 때( / ) 자동으로 HTML 파일을 보여줌
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
+});
+
 // ── Database setup (Neon DB / PostgreSQL) ──────────────────
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

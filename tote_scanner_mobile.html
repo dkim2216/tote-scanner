@@ -16,8 +16,14 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:#050C18;color:#E2EAF8;font-family:'Rajdhani',sans-serif}
 #root{height:100%}
-.btn-tap:active{transform:scale(.95 )}
+.scan-pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 #00C8F055}50%{box-shadow:0 0 0 14px #00C8F000}}
+.pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes popIn{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
+.btn-tap:active{transform:scale(.95)}
 .btn-tap{transition:transform .1s;cursor:pointer}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#1E3050;border-radius:4px}
+input:focus{outline:none}
 </style>
 </head>
 <body>
@@ -25,14 +31,11 @@ html,body{height:100%;background:#050C18;color:#E2EAF8;font-family:'Rajdhani',sa
 <script type="text/babel">
 const { useState, useEffect, useMemo, useRef } = React;
 
-// 테마 색상 정의
 const C = { bg: "#0A1628", panel: "#111E30", card: "#162338", border: "#1E3050", accent: "#00C8F0", green: "#00E676", amber: "#FFB300", red: "#FF3D57", text: "#E2EAF8", muted: "#5A7A9A" };
+const DEMO = [{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}];
 
-// API 통신 함수
 const API = {
-  getJobs: async () => {
-    try { const r = await fetch("/api/jobs"); return await r.json(); } catch(e) { return []; }
-  },
+  getJobs: async () => { try { const r = await fetch("/api/jobs"); return await r.json(); } catch(e) { return []; } },
   createJob: async (no, label, totes) => {
     try {
       const r = await fetch("/api/jobs", {
@@ -42,73 +45,169 @@ const API = {
       });
       return await r.json();
     } catch(e) { return null; }
+  },
+  completeJob: async (id, mode, scanned, missed) => {
+    try {
+      const r = await fetch(`/api/jobs/${id}/complete/${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scanned, missed })
+      });
+      return await r.json();
+    } catch(e) { return null; }
   }
 };
 
 function App() {
   const [tab, setTab] = useState("manifest");
+  const [manifest, setManifest] = useState(null);
+  const [jobId, setJobId] = useState(null);
+  const [scanned, setScanned] = useState(new Set());
+  const [log, setLog] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [scanInput, setScanInput] = useState("");
 
-  // 앱 시작 시 DB에서 데이터 가져오기 테스트
+  const loadDemo = async () => {
+    setLoading(true);
+    const res = await API.createJob("DEMO-"+Date.now().toString().slice(-4), "Demo Manifest", DEMO);
+    if (res && res.id) {
+      setJobId(res.id);
+      setManifest(DEMO);
+      setScanned(new Set());
+      setLog([{time: new Date().toLocaleTimeString(), msg: "Demo Manifest Loaded", type: "ok"}]);
+      alert("Demo Data Loaded to Neon DB!");
+    }
+    setLoading(false);
+  };
+
+  const handleScan = () => {
+    const id = scanInput.trim().toUpperCase();
+    if (!id || !manifest) return;
+    const item = manifest.find(t => t.toteId === id);
+    const time = new Date().toLocaleTimeString();
+    if (!item) {
+      setLog(prev => [{time, msg: "NOT IN MANIFEST: "+id, type: "error"}, ...prev]);
+    } else if (scanned.has(id)) {
+      setLog(prev => [{time, msg: "DUPLICATE: "+id, type: "warn"}, ...prev]);
+    } else {
+      const newScanned = new Set(scanned);
+      newScanned.add(id);
+      setScanned(newScanned);
+      setLog(prev => [{time, msg: "OK: "+id+" -> "+item.storeId, type: "ok"}, ...prev]);
+    }
+    setScanInput("");
+  };
+
+  const completeJob = async () => {
+    if (!jobId) return;
+    setLoading(true);
+    const scannedList = manifest.filter(t => scanned.has(t.toteId));
+    const missedList = manifest.filter(t => !scanned.has(t.toteId));
+    const res = await API.completeJob(jobId, "load", scannedList, missedList);
+    if (res) {
+      alert("Job Saved to Neon DB!");
+      setManifest(null);
+      setJobId(null);
+      setScanned(new Set());
+      setTab("history");
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const data = await API.getJobs();
-      setJobs(data);
-      setLoading(false);
-    };
-    load();
-  }, []);
+    if (tab === "history") {
+      const fetchJobs = async () => {
+        setLoading(true);
+        const data = await API.getJobs();
+        setJobs(data);
+        setLoading(false);
+      };
+      fetchJobs();
+    }
+  }, [tab]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg }}>
-      {/* 헤더 */}
       <div style={{ background: C.panel, padding: "15px", textAlign: "center", borderBottom: `1px solid ${C.border}` }}>
         <h2 style={{ color: C.accent, letterSpacing: "2px" }}>TOTE SCANNER v2</h2>
       </div>
 
-      {/* 메인 컨텐츠 */}
       <div style={{ flex: 1, padding: "20px", overflowY: "auto" }}>
         {tab === "manifest" && (
-          <div>
-            <h3 style={{ marginBottom: "15px" }}>Manifest Load</h3>
-            <button 
-              className="btn-tap"
-              onClick={() => alert("Demo Load Clicked")}
-              style={{ width: "100%", padding: "15px", background: C.accent, border: "none", borderRadius: "10px", fontWeight: "bold" }}
-            >
-              LOAD DEMO DATA
+          <div className="fade-in">
+            <h3 style={{ marginBottom: "15px", color: C.muted }}>DATA SOURCE</h3>
+            <button className="btn-tap" onClick={loadDemo} disabled={loading} style={{ width: "100%", padding: "15px", background: C.accent, border: "none", borderRadius: "12px", fontWeight: "bold", color: "#0A1628", marginBottom: "20px" }}>
+              {loading ? "LOADING..." : "LOAD DEMO MANIFEST"}
             </button>
+            {manifest && (
+              <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: "12px", border: `1px solid ${C.border}` }}>
+                <div style={{ color: C.green, fontWeight: "bold" }}>● Manifest Active</div>
+                <div style={{ fontSize: "14px", marginTop: "5px" }}>{manifest.length} Totes Ready</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "scan" && (
+          <div className="fade-in">
+            {!manifest ? <p style={{textAlign:"center", color:C.muted, marginTop:40}}>No manifest loaded</p> : (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
+                  <div style={{ textAlign: "center", flex: 1 }}>
+                    <div style={{ fontSize: "24px", fontWeight: "bold", color: C.green }}>{scanned.size}</div>
+                    <div style={{ fontSize: "10px", color: C.muted }}>SCANNED</div>
+                  </div>
+                  <div style={{ textAlign: "center", flex: 1 }}>
+                    <div style={{ fontSize: "24px", fontWeight: "bold", color: C.accent }}>{manifest.length - scanned.size}</div>
+                    <div style={{ fontSize: "10px", color: C.muted }}>REMAINING</div>
+                  </div>
+                </div>
+                <div className="scan-pulse" style={{ background: C.card, padding: "15px", borderRadius: "12px", border: `2px solid ${C.accent}`, display: "flex", gap: "10px", marginBottom: "20px" }}>
+                  <input value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleScan()} placeholder="Scan Tote ID..." style={{ flex: 1, background: "none", border: "none", color: "white", fontFamily: "'Share Tech Mono', monospace" }} />
+                  <button onClick={handleScan} style={{ background: C.accent, border: "none", padding: "5px 15px", borderRadius: "5px", fontWeight: "bold" }}>GO</button>
+                </div>
+                <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+                  {log.map((l, i) => (
+                    <div key={i} style={{ fontSize: "12px", padding: "5px 0", borderBottom: `1px solid ${C.border}`, color: l.type === "error" ? C.red : l.type === "warn" ? C.amber : C.green }}>
+                      [{l.time}] {l.msg}
+                    </div>
+                  ))}
+                </div>
+                <button className="btn-tap" onClick={completeJob} style={{ width: "100%", padding: "15px", background: C.green, border: "none", borderRadius: "12px", fontWeight: "bold", color: "#0A1628", marginTop: "20px" }}>COMPLETE & SAVE</button>
+              </>
+            )}
           </div>
         )}
 
         {tab === "history" && (
-          <div>
-            <h3 style={{ marginBottom: "15px" }}>History (Neon DB)</h3>
-            {loading ? <p>Loading...</p> : (
-              jobs.length === 0 ? <p style={{color:C.muted}}>No data in DB</p> : 
-              jobs.map(j => (
-                <div key={j.id} style={{ background: C.card, padding: "15px", borderRadius: "10px", marginBottom: "10px", border: `1px solid ${C.border}` }}>
-                  <div style={{ fontWeight: "bold", color: C.accent }}>{j.manifest_no}</div>
-                  <div style={{ fontSize: "12px", color: C.muted }}>{new Date(j.created_at).toLocaleString()}</div>
+          <div className="fade-in">
+            <h3 style={{ marginBottom: "15px", color: C.muted }}>NEON DB HISTORY</h3>
+            {loading ? <p>Loading...</p> : jobs.map(j => (
+              <div key={j.id} style={{ background: C.card, padding: "15px", borderRadius: "12px", marginBottom: "10px", border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: "bold", color: C.accent }}>{j.manifest_no}</span>
+                  <span style={{ fontSize: "12px", color: C.muted }}>{new Date(j.created_at).toLocaleDateString()}</span>
                 </div>
-              ))
-            )}
+                <div style={{ marginTop: "10px", display: "flex", gap: "20px" }}>
+                  <div style={{ color: C.green }}>✓ {j.load_scanned}</div>
+                  <div style={{ color: C.red }}>✗ {j.load_missed}</div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* 하단 네비게이션 */}
-      <div style={{ display: "flex", background: C.panel, borderTop: `1px solid ${C.border}` }}>
-        <button onClick={() => setTab("manifest")} style={{ flex: 1, padding: "15px", background: "none", border: "none", color: tab === "manifest" ? C.accent : C.muted }}>MANIFEST</button>
-        <button onClick={() => setTab("history")} style={{ flex: 1, padding: "15px", background: "none", border: "none", color: tab === "history" ? C.accent : C.muted }}>HISTORY</button>
+      <div style={{ display: "flex", background: C.panel, borderTop: `1px solid ${C.border}`, paddingBottom: "10px" }}>
+        {["manifest", "scan", "history"].map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "15px", background: "none", border: "none", color: tab === t ? C.accent : C.muted, fontWeight: "bold", fontSize: "12px" }}>{t.toUpperCase()}</button>
+        ))}
       </div>
     </div>
   );
 }
 
-// 앱 실행
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
 </script>

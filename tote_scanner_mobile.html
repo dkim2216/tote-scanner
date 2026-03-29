@@ -17,7 +17,7 @@
 html,body{height:100%;background:#050C18}
 .scan-pulse{animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #00C8F055}50%{box-shadow:0 0 0 14px #00C8F000}}
-.pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1) both}
+.pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1 ) both}
 @keyframes popIn{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
 .store-flash{animation:sf .3s cubic-bezier(.34,1.56,.64,1) both}
 @keyframes sf{from{transform:scale(.84) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
@@ -35,7 +35,9 @@ input::placeholder{color:#5A7A9A}input:focus{outline:none}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const{useState,useRef,useEffect,useMemo}=React;
+// React 라이브러리에서 필요한 기능들을 안전하게 가져옵니다.
+const { useState, useRef, useEffect, useMemo } = React;
+
 const SP=["#00C8F0","#FFB300","#00E676","#FF6B6B","#A78BFA","#F97316","#34D399","#FB7185"];
 const gc=(s,a)=>SP[Math.max(0,a.indexOf(s))%SP.length];
 const C={bg:"#0A1628",panel:"#111E30",card:"#162338",border:"#1E3050",accent:"#00C8F0",green:"#00E676",amber:"#FFB300",red:"#FF3D57",text:"#E2EAF8",muted:"#5A7A9A",dim:"#2A4060"};
@@ -43,10 +45,10 @@ const DEMO=[{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"St
 const IL={upload:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",truck:"M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3M9 21H6a2 2 0 0 1-2-2v-1m15-3h2l2 4v4h-6v-4l2-4zM13 21h6M17 11v6",offload:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",alert:"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",list:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",ok:"M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",barcode:"M4 7V4h3M17 4h3v3M4 17v3h3M17 20h3v-3M7 8v8M10 8v4M13 8v8M16 8v4",history:"M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",settings:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",mail:"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zM22 6l-10 7L2 6",check:"M20 6L9 17l-5-5"};
 const Ico=({d,size=22,color="currentColor"})=>(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>);
 
-// API Base URL (Relative to current host)
+// API Base URL
 const API_BASE = "/api";
 
-// DB Helpers (Fetch from Backend)
+// DB Helpers
 const DB = {
   getJobs: async () => {
     try {
@@ -73,9 +75,7 @@ const DB = {
       });
       return await res.json();
     } catch (e) { return null; }
-  },
-  getCfg:()=>{try{return JSON.parse(localStorage.getItem("ts_cfg")||"{}")}catch{return{}}},
-  saveCfg:(s)=>localStorage.setItem("ts_cfg",JSON.stringify(s)),
+  }
 };
 
 const parseCSV=t=>t.trim().split(/\r?\n/).reduce((a,l)=>{
@@ -115,12 +115,6 @@ const CompleteModal=({mode,session,allStores,manifest,onConfirm,onCancel})=>{
             </div>
           ))}
         </div>
-        <div style={{padding:"10px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"flex-start",gap:8}}>
-          <Ico d={IL.mail} color={C.accent} size={15}/>
-          <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,lineHeight:1.6,color:C.accent}}>
-            {v.missing===0?"Job will be saved to Neon DB":"Alert will be sent via Backend"}
-          </span>
-        </div>
         <div style={{padding:"13px 16px",display:"flex",gap:10}}>
           <button onClick={onCancel} disabled={loading} className="btn-tap" style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 0",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.muted}}>BACK</button>
           <button onClick={go} disabled={loading} className="btn-tap" style={{flex:2,background:loading?C.dim:v.missing>0?C.amber:C.green,border:"none",borderRadius:12,padding:"12px 0",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:"#0A1628",cursor:loading?"wait":"pointer"}}>{loading?"SAVING...":"CONFIRM & SAVE"}</button>
@@ -149,7 +143,7 @@ const ManifestScreen=({manifest,onLoad})=>{
         <div style={{position:"absolute",top:-18,right:-18,width:80,height:80,borderRadius:"50%",background:`${C.accent}10`,border:`1px solid ${C.accent}20`}}/>
         <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:2,marginBottom:4}}>STATUS</div>
         <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:18,color:C.text,marginBottom:2}}>{manifest?"Manifest Loaded":"No Manifest"}</div>
-        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:manifest?C.green:C.muted}}>{manifest?"● "+manifest.manifestNo+" · "+manifest.totes.length+" totes · "+stores.length+" stores":"● Enter manifest number then load data"}</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:manifest?C.green:C.muted}}>{manifest?"● "+manifest.manifestNo+" · "+manifest.totes.length+" totes":"● Enter manifest number then load data"}</div>
       </div>
       <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:2,marginBottom:10}}>LOAD DATA</div>
       <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
@@ -216,24 +210,24 @@ const ScanScreen=({mode,session,allStores,onScan,onCompleteRequest})=>{
 
 // History Screen
 const HistoryScreen = () => {
-  const [jobs, setJobs] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  React.useEffect(() => {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let isMounted = true;
     const fetchJobs = async () => {
       try {
         const data = await DB.getJobs();
-        setJobs(Array.isArray(data) ? data : []);
+        if (isMounted) setJobs(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error(e);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchJobs();
+    return () => { isMounted = false; };
   }, []);
-
   if (loading) return <div style={{color:C.muted, padding:20, textAlign:"center", fontFamily:"'Share Tech Mono',monospace"}}>Loading history from Neon DB...</div>;
-
   return (
     <div className="fade-in" style={{padding:14, height:"100%", overflowY:"auto", paddingBottom:80}}>
       {jobs.length === 0 ? (
@@ -261,7 +255,6 @@ const HistoryScreen = () => {
     </div>
   );
 };
-
 
 // Nav
 const NAV=[{id:"manifest",l:"MANIFEST",i:IL.list},{id:"load",l:"LOAD",i:IL.truck},{id:"offload",l:"OFFLOAD",i:IL.offload},{id:"history",l:"HISTORY",i:IL.history}];
@@ -344,7 +337,8 @@ function App(){
   );
   return (<div style={{width:"100%",height:"100vh",background:C.bg,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>{content}</div>);
 }
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App/>);
 </script>
 </body>
 </html>

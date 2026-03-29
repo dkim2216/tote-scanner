@@ -172,7 +172,7 @@ function App() {
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: manifest ? C.green : C.muted, boxShadow: manifest ? `0 0 8px ${C.green}` : "none" }}/>
       </div>
 
-      {/* Content */}
+      {/* Content Area */}
       <div style={{ flex: 1, overflowY: "auto", padding: "15px", position: "relative" }}>
         {tab === "manifest" && (
           <div className="fade-in">
@@ -254,12 +254,17 @@ function App() {
         )}
       </div>
 
-      {/* Nav */}
+      {/* Bottom Navigation Tabs */}
       <div style={{ display: "flex", background: C.panel, borderTop: `1px solid ${C.border}`, paddingBottom: "env(safe-area-inset-bottom)" }}>
-        {["manifest", "load", "offload", "history"].map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "15px 0", background: "none", border: "none", color: tab === t ? C.accent : C.muted, fontWeight: "bold", fontSize: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 16, height: 2, background: tab === t ? C.accent : "transparent", borderRadius: 2, marginBottom: 2 }}/>
-            {t.toUpperCase()}
+        {[
+          {id: "manifest", label: "MANIFEST"},
+          {id: "load", label: "LOAD"},
+          {id: "offload", label: "OFFLOAD"},
+          {id: "history", label: "HISTORY"}
+        ].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: "15px 0", background: "none", border: "none", color: tab === t.id ? C.accent : C.muted, fontWeight: "bold", fontSize: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 16, height: 2, background: tab === t.id ? C.accent : "transparent", borderRadius: 2, marginBottom: 2 }}/>
+            {t.label}
           </button>
         ))}
       </div>

@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -33,6 +34,7 @@ input:focus{outline:none}
 .verify-toggle{display:flex;background:#111E30;border-radius:10px;padding:4px;margin-bottom:20px;border:1px solid #1E3050}
 .verify-toggle button{flex:1;padding:10px;border:none;border-radius:8px;background:none;color:#5A7A9A;font-weight:bold;font-size:12px;transition:all .2s}
 .verify-toggle button.active{background:#00C8F0;color:#0A1628}
+#reader{width:100%;border-radius:12px;overflow:hidden;margin-bottom:15px;border:1px solid #1E3050;background:#000}
 </style>
 </head>
 <body>
@@ -101,12 +103,42 @@ function App() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [scanInput, setScanInput] = useState("");
-  const [manNo, setManNo] = useState("");
+  const [cameraActive, setCameraActive] = useState(false);
   const logRef = useRef();
+  const scannerRef = useRef(null);
 
   const allStores = useMemo(() => manifest ? [...new Set(manifest.map(t => t.storeId))].sort() : [], [manifest]);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = 0; }, [lSess.log, oSess.log]);
+
+  const toggleCamera = () => {
+    if (cameraActive) {
+      if (scannerRef.current) {
+        scannerRef.current.stop().then(() => {
+          setCameraActive(false);
+          scannerRef.current = null;
+        });
+      }
+    } else {
+      setCameraActive(true);
+      setTimeout(() => {
+        const html5QrCode = new Html5Qrcode("reader");
+        scannerRef.current = html5QrCode;
+        html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 150 } },
+          (decodedText) => {
+            setScanInput(decodedText);
+            handleScan(tab, decodedText);
+          },
+          (errorMessage) => {}
+        ).catch(err => {
+          console.error("Camera Error:", err);
+          setCameraActive(false);
+        });
+      }, 100);
+    }
+  };
 
   const loadManifest = async (totes, label, no) => {
     setLoading(true);
@@ -137,8 +169,8 @@ function App() {
     reader.readAsText(file);
   };
 
-  const handleScan = (mode) => {
-    const id = scanInput.trim().toUpperCase();
+  const handleScan = (mode, overrideInput) => {
+    const id = (overrideInput || scanInput).trim().toUpperCase();
     if (!id || !manifest) return;
     const sess = mode === "load" ? lSess : oSess;
     const setSess = mode === "load" ? setLSess : setOSess;
@@ -171,7 +203,7 @@ function App() {
     const res = await API.completeJob(jobId, mode, scannedList, missedList);
     if (res) {
       setSess(s => ({...s, completed: true}));
-      alert(`${mode.toUpperCase()} Complete! Email sent to admin.`);
+      alert(`${mode.toUpperCase()} Complete! Data saved to Neon DB.`);
     }
     setLoading(false);
   };
@@ -208,7 +240,7 @@ function App() {
             <div style={{ textAlign: "center", color: C.muted, fontSize: 12, marginBottom: 20 }}>OR</div>
             <button className="btn-tap" onClick={() => loadManifest([{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}], "Demo", "DEMO-001")} style={{ width: "100%", padding: "16px", background: C.accent, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628", marginBottom: 15 }}>LOAD DEMO MANIFEST</button>
             {manifest && (
-              <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: 12, border: `1px solid ${C.border}`, color: C.green, fontWeight: "bold" }}>● Manifest Active: {manNo || "ACTIVE"}</div>
+              <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: 12, border: `1px solid ${C.border}`, color: C.green, fontWeight: "bold" }}>● Manifest Active: {manifest.length} Totes</div>
             )}
           </div>
         )}
@@ -227,8 +259,11 @@ function App() {
 
                 {tab === "offload" && oSess.last && <SortCard toteId={oSess.last.id} storeId={oSess.last.store} color={oSess.last.color} />}
 
+                {cameraActive && <div id="reader"></div>}
+
                 <div className={currentSess.completed ? "" : "scan-pulse"} style={{ background: C.card, border: `2px solid ${tab === "load" ? C.accent : C.amber}`, borderRadius: 12, padding: "12px", display: "flex", gap: 10, marginBottom: 15 }}>
                   <input value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleScan(tab)} disabled={currentSess.completed} placeholder="Scan Tote ID..." style={{ flex: 1, background: "none", border: "none", color: "white", fontSize: 15 }} />
+                  <button onClick={toggleCamera} style={{ background: "none", border: "none", color: C.accent, fontSize: 20 }}>📷</button>
                   <button onClick={() => handleScan(tab)} style={{ background: tab === "load" ? C.accent : C.amber, border: "none", padding: "6px 15px", borderRadius: 8, fontWeight: "bold" }}>GO</button>
                 </div>
 

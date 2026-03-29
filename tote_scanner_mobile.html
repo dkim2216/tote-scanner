@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Tote Scanner v2</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#00C8F0">
+<meta name="theme-color" content="#0A1628">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -15,31 +15,26 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:#050C18;color:#E2EAF8;font-family:'Rajdhani',sans-serif;overflow:hidden}
-#root{height:100%}
+#root{height:100%;display:flex;flex-direction:column}
 .scan-pulse{animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #00C8F055}50%{box-shadow:0 0 0 14px #00C8F000}}
 .pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1) both}
 @keyframes popIn{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
-.store-flash{animation:sf .3s cubic-bezier(.34,1.56,.64,1) both}
-@keyframes sf{from{transform:scale(.84) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
-.slide-up{animation:su .28s ease both}
-@keyframes su{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-.fade-in{animation:fi .3s ease both}
-@keyframes fi{from{opacity:0}to{opacity:1}}
 .btn-tap:active{transform:scale(.95);filter:brightness(1.2)}
 .btn-tap{transition:transform .1s,filter .1s;cursor:pointer}
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#1E3050;border-radius:4px}
 input:focus{outline:none}
+.nav-tab{flex:1;padding:12px 0;background:none;border:none;display:flex;flex-direction:column;alignItems:center;gap:4;position:relative;color:#5A7A9A;font-weight:bold;font-size:10px;font-family:'Share Tech Mono',monospace}
+.nav-tab.active{color:#00C8F0}
+.nav-tab.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#00C8F0;border-radius:0 0 4px 4px}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useMemo, useRef } = React;
-
 const C = { bg: "#0A1628", panel: "#111E30", card: "#162338", border: "#1E3050", accent: "#00C8F0", green: "#00E676", amber: "#FFB300", red: "#FF3D57", text: "#E2EAF8", muted: "#5A7A9A" };
-const SP = ["#00C8F0","#FFB300","#00E676","#FF6B6B","#A78BFA","#F97316","#34D399","#FB7185"];
-const gc = (s, a) => SP[Math.max(0, a.indexOf(s)) % SP.length];
+const DEMO = [{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}];
 
 const API = {
   getJobs: async () => { try { const r = await fetch("/api/jobs"); return await r.json(); } catch(e) { return []; } },
@@ -65,7 +60,7 @@ const API = {
   }
 };
 
-const Ring = ({pct, size=80, stroke=6, color=C.accent, label, sub}) => {
+const Ring = ({pct, size=70, stroke=6, color=C.accent, label, sub}) => {
   const r = (size-stroke)/2, circ = 2*Math.PI*r, off = circ*(1-pct/100);
   return (
     <div style={{position:"relative", width:size, height:size, flexShrink:0}}>
@@ -74,20 +69,12 @@ const Ring = ({pct, size=80, stroke=6, color=C.accent, label, sub}) => {
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={off} style={{transition:"stroke-dashoffset .5s ease"}}/>
       </svg>
       <div style={{position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center"}}>
-        <span style={{fontFamily:"'Rajdhani',sans-serif", fontWeight:700, fontSize:size>70?20:14, color:C.text, lineHeight:1}}>{label}</span>
-        {sub && <span style={{fontFamily:"'Share Tech Mono',monospace", fontSize:9, color:C.muted, marginTop:1}}>{sub}</span>}
+        <span style={{fontFamily:"'Rajdhani',sans-serif", fontWeight:700, fontSize:16, color:C.text, lineHeight:1}}>{label}</span>
+        {sub && <span style={{fontFamily:"'Share Tech Mono',monospace", fontSize:8, color:C.muted, marginTop:1}}>{sub}</span>}
       </div>
     </div>
   );
 };
-
-const SortCard = ({toteId, storeId, color}) => (
-  <div className="store-flash" style={{background:`linear-gradient(135deg,${color}28,${color}08)`, border:`2.5px solid ${color}`, borderRadius:18, padding:"12px 16px", marginBottom:10, textAlign:"center", boxShadow:`0 0 28px ${color}35`}}>
-    <div style={{fontFamily:"'Share Tech Mono',monospace", fontSize:10, letterSpacing:4, color, marginBottom:2}}>SORT TO</div>
-    <div style={{fontFamily:"'Rajdhani',sans-serif", fontWeight:700, fontSize:50, color, lineHeight:1, marginBottom:3}}>{storeId}</div>
-    <div style={{fontFamily:"'Share Tech Mono',monospace", fontSize:11, color:C.muted}}>{toteId}</div>
-  </div>
-);
 
 function App() {
   const [tab, setTab] = useState("manifest");
@@ -100,10 +87,6 @@ function App() {
   const [scanInput, setScanInput] = useState("");
   const [manNo, setManNo] = useState("");
   const logRef = useRef();
-
-  const allStores = useMemo(() => manifest ? [...new Set(manifest.map(t => t.storeId))].sort() : [], [manifest]);
-
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = 0; }, [lSess.log, oSess.log]);
 
   const loadManifest = async (totes, label, no) => {
     setLoading(true);
@@ -124,10 +107,8 @@ function App() {
     const sess = mode === "load" ? lSess : oSess;
     const setSess = mode === "load" ? setLSess : setOSess;
     if (sess.completed) return;
-
     const item = manifest.find(t => t.toteId === id);
     const time = new Date().toLocaleTimeString("en-GB", {hour12:false});
-    
     if (!item) {
       setSess(s => ({...s, log: [{time, msg: "NOT IN MANIFEST: "+id, type: "error"}, ...s.log]}));
     } else if (sess.scanned.has(id)) {
@@ -135,95 +116,55 @@ function App() {
     } else {
       const nset = new Set(sess.scanned);
       nset.add(id);
-      const color = gc(item.storeId, allStores);
-      setSess(s => ({...s, scanned: nset, last: {id, store: item.storeId, color}, log: [{time, msg: "OK: "+id, store: item.storeId, color, type: "ok"}, ...s.log]}));
+      setSess(s => ({...s, scanned: nset, log: [{time, msg: "OK: "+id+" -> "+item.storeId, type: "ok"}, ...s.log]}));
     }
     setScanInput("");
   };
 
-  const completeJob = async (mode) => {
-    if (!jobId) return;
-    setLoading(true);
-    const sess = mode === "load" ? lSess : oSess;
-    const setSess = mode === "load" ? setLSess : setOSess;
-    const scannedList = manifest.filter(t => sess.scanned.has(t.toteId)).map(t => ({toteId: t.toteId, storeId: t.storeId}));
-    const missedList = manifest.filter(t => !sess.scanned.has(t.toteId)).map(t => ({toteId: t.toteId, storeId: t.storeId}));
-    
-    const res = await API.completeJob(jobId, mode, scannedList, missedList);
-    if (res) {
-      setSess(s => ({...s, completed: true}));
-      alert(`${mode.toUpperCase()} Complete! Email sent to admin.`);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (tab === "history") {
-      API.getJobs().then(setJobs);
-    }
-  }, [tab]);
+  useEffect(() => { if (tab === "history") API.getJobs().then(setJobs); }, [tab]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg }}>
       {/* Header */}
-      <div style={{ background: C.panel, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ background: C.panel, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}`, paddingTop: "env(safe-area-inset-top)" }}>
         <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 10, color: C.muted }}>{new Date().toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"})}</span>
         <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, color: C.accent, letterSpacing: 2 }}>TOTE SCANNER v2</span>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: manifest ? C.green : C.muted, boxShadow: manifest ? `0 0 8px ${C.green}` : "none" }}/>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: manifest ? C.green : C.muted }}/>
       </div>
 
-      {/* Content Area */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "15px", position: "relative" }}>
+      {/* Main Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
         {tab === "manifest" && (
           <div className="fade-in">
-            <div style={{ marginBottom: 15 }}>
-              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 5 }}>MANIFEST NUMBER</div>
-              <input value={manNo} onChange={e => setManNo(e.target.value)} placeholder="e.g. MAN-2024-001" style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 15px", color: "white", fontSize: 14 }} />
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>MANIFEST NUMBER</div>
+              <input value={manNo} onChange={e => setManNo(e.target.value)} placeholder="e.g. MAN-2024-001" style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px", color: "white" }} />
             </div>
-            <button className="btn-tap" onClick={() => loadManifest([{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}], "Demo", manNo || "DEMO-001")} style={{ width: "100%", padding: "15px", background: C.accent, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628", marginBottom: 10 }}>LOAD DEMO MANIFEST</button>
-            {manifest && (
-              <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: 12, border: `1px solid ${C.border}`, marginTop: 10 }}>
-                <div style={{ color: C.green, fontWeight: "bold" }}>● Manifest Active: {manNo || "DEMO-001"}</div>
-                <div style={{ fontSize: "13px", color: C.muted, marginTop: 5 }}>{manifest.length} Totes Loaded to Neon DB</div>
-              </div>
-            )}
+            <button className="btn-tap" onClick={() => loadManifest(DEMO, "Demo", manNo || "DEMO-001")} style={{ width: "100%", padding: "16px", background: C.accent, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628", marginBottom: 15 }}>LOAD DEMO MANIFEST</button>
+            {manifest && <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: 12, border: `1px solid ${C.border}`, color: C.green, fontWeight: "bold" }}>● Manifest Active: {manNo || "DEMO-001"}</div>}
           </div>
         )}
 
         {(tab === "load" || tab === "offload") && (
-          <div className="fade-in" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-            {!manifest ? <div style={{ textAlign: "center", marginTop: 50, color: C.muted }}>No manifest loaded</div> : (
+          <div className="fade-in">
+            {!manifest ? <div style={{textAlign:"center", color:C.muted, marginTop:50}}>No manifest loaded</div> : (
               <>
-                <div style={{ display: "flex", gap: 15, marginBottom: 15 }}>
+                <div style={{ display: "flex", gap: 15, marginBottom: 20 }}>
                   <Ring pct={Math.round(((tab === "load" ? lSess : oSess).scanned.size / manifest.length) * 100)} color={tab === "load" ? C.accent : C.amber} label={Math.round(((tab === "load" ? lSess : oSess).scanned.size / manifest.length) * 100) + "%"} sub={(tab === "load" ? lSess : oSess).scanned.size + "/" + manifest.length} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 18, color: C.text }}>{tab.toUpperCase()} SCANNING</div>
-                    <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 10, color: (tab === "load" ? lSess : oSess).completed ? C.green : C.muted }}>{(tab === "load" ? lSess : oSess).completed ? "✓ COMPLETED" : "● IN PROGRESS"}</div>
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>{tab.toUpperCase()} SCANNING</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{(tab === "load" ? lSess : oSess).completed ? "✓ COMPLETED" : "● IN PROGRESS"}</div>
                   </div>
                 </div>
-
-                {tab === "offload" && oSess.last && <SortCard toteId={oSess.last.id} storeId={oSess.last.store} color={oSess.last.color} />}
-
-                <div className={(tab === "load" ? lSess : oSess).completed ? "" : "scan-pulse"} style={{ background: C.card, border: `2px solid ${tab === "load" ? C.accent : C.amber}`, borderRadius: 12, padding: "12px", display: "flex", gap: 10, marginBottom: 15 }}>
-                  <input value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleScan(tab)} disabled={(tab === "load" ? lSess : oSess).completed} placeholder="Scan Tote ID..." style={{ flex: 1, background: "none", border: "none", color: "white", fontSize: 15 }} />
-                  <button onClick={() => handleScan(tab)} style={{ background: tab === "load" ? C.accent : C.amber, border: "none", padding: "5px 15px", borderRadius: 8, fontWeight: "bold" }}>GO</button>
+                <div className="scan-pulse" style={{ background: C.card, border: `2px solid ${tab === "load" ? C.accent : C.amber}`, borderRadius: 12, padding: "12px", display: "flex", gap: 10, marginBottom: 15 }}>
+                  <input value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleScan(tab)} placeholder="Scan Tote ID..." style={{ flex: 1, background: "none", border: "none", color: "white" }} />
+                  <button onClick={() => handleScan(tab)} style={{ background: tab === "load" ? C.accent : C.amber, border: "none", padding: "6px 15px", borderRadius: 8, fontWeight: "bold" }}>GO</button>
                 </div>
-
-                <div ref={logRef} style={{ flex: 1, overflowY: "auto", marginBottom: 15 }}>
+                <div style={{ maxHeight: 200, overflowY: "auto" }}>
                   {(tab === "load" ? lSess : oSess).log.map((l, i) => (
-                    <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                      <span style={{ fontSize: 9, color: C.muted }}>{l.time}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, color: l.type === "error" ? C.red : l.type === "warn" ? C.amber : C.green }}>{l.msg}</div>
-                        {l.store && <div style={{ fontSize: 10, color: l.color }}>-> {l.store}</div>}
-                      </div>
-                    </div>
+                    <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: `1px solid ${C.border}`, color: l.type === "error" ? C.red : l.type === "warn" ? C.amber : C.green }}>[{l.time}] {l.msg}</div>
                   ))}
                 </div>
-
-                {!(tab === "load" ? lSess : oSess).completed && (
-                  <button className="btn-tap" onClick={() => completeJob(tab)} disabled={loading} style={{ width: "100%", padding: "15px", background: C.green, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628" }}>{loading ? "SAVING..." : "COMPLETE " + tab.toUpperCase()}</button>
-                )}
               </>
             )}
           </div>
@@ -231,22 +172,12 @@ function App() {
 
         {tab === "history" && (
           <div className="fade-in">
-            <h3 style={{ marginBottom: 15, color: C.muted, fontSize: 12, letterSpacing: 2 }}>NEON DB HISTORY</h3>
+            <h3 style={{ fontSize: 12, color: C.muted, marginBottom: 15 }}>NEON DB HISTORY</h3>
             {jobs.map(j => (
               <div key={j.id} style={{ background: C.card, padding: "15px", borderRadius: 12, marginBottom: 10, border: `1px solid ${C.border}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ fontWeight: "bold", color: C.accent }}>{j.manifest_no}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>{new Date(j.created_at).toLocaleDateString()}</span>
-                </div>
-                <div style={{ display: "flex", gap: 15 }}>
-                  <div style={{ flex: 1, background: C.panel, padding: 8, borderRadius: 8, textAlign: "center" }}>
-                    <div style={{ fontSize: 16, fontWeight: "bold", color: C.green }}>{j.load_scanned || 0}</div>
-                    <div style={{ fontSize: 8, color: C.muted }}>LOADED</div>
-                  </div>
-                  <div style={{ flex: 1, background: C.panel, padding: 8, borderRadius: 8, textAlign: "center" }}>
-                    <div style={{ fontSize: 16, fontWeight: "bold", color: C.amber }}>{j.offload_scanned || 0}</div>
-                    <div style={{ fontSize: 8, color: C.muted }}>OFFLOADED</div>
-                  </div>
                 </div>
               </div>
             ))}
@@ -254,24 +185,17 @@ function App() {
         )}
       </div>
 
-      {/* Bottom Navigation Tabs */}
-      <div style={{ display: "flex", background: C.panel, borderTop: `1px solid ${C.border}`, paddingBottom: "env(safe-area-inset-bottom)" }}>
-        {[
-          {id: "manifest", label: "MANIFEST"},
-          {id: "load", label: "LOAD"},
-          {id: "offload", label: "OFFLOAD"},
-          {id: "history", label: "HISTORY"}
-        ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: "15px 0", background: "none", border: "none", color: tab === t.id ? C.accent : C.muted, fontWeight: "bold", fontSize: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 16, height: 2, background: tab === t.id ? C.accent : "transparent", borderRadius: 2, marginBottom: 2 }}/>
-            {t.label}
+      {/* Bottom Navigation - Fixed and Visible */}
+      <div style={{ background: C.panel, borderTop: `1px solid ${C.border}`, display: "flex", paddingBottom: "calc(15px + env(safe-area-inset-bottom))", paddingTop: "5px" }}>
+        {["manifest", "load", "offload", "history"].map(t => (
+          <button key={t} onClick={() => setTab(t)} className={`nav-tab ${tab === t ? 'active' : ''}`}>
+            <div style={{ fontSize: 10 }}>{t.toUpperCase()}</div>
           </button>
         ))}
       </div>
     </div>
   );
 }
-
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
 </script>

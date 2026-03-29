@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
 const pool = new Pool({
@@ -28,7 +28,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// DB 테이블 생성 (최초 1회)
+// DB 테이블 생성 (상세 기록용 테이블 추가)
 const initDB = async () => {
   try {
     await pool.query(`
@@ -45,8 +45,23 @@ const initDB = async () => {
         load_completed_at TIMESTAMP,
         offload_completed_at TIMESTAMP
       );
+      CREATE TABLE IF NOT EXISTS scan_records (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER REFERENCES jobs(id),
+        mode TEXT,
+        tote_id TEXT,
+        store_id TEXT,
+        scanned_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS missed_records (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER REFERENCES jobs(id),
+        mode TEXT,
+        tote_id TEXT,
+        store_id TEXT
+      );
     `);
-    console.log("DB Tables Ready");
+    console.log("DB Tables Ready with detailed records");
   } catch (err) {
     console.error("DB Init Error:", err);
   }
@@ -75,26 +90,51 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
   const { id, mode } = req.params;
   const { scanned = [], missed = [] } = req.body;
   try {
-    // DB 업데이트
+    // 1. DB 업데이트 (요약 정보)
     if (mode === "load") {
       await pool.query('UPDATE jobs SET load_completed_at=NOW(), load_scanned=$1, load_missed=$2 WHERE id=$3', [scanned.length, missed.length, id]);
     } else {
       await pool.query('UPDATE jobs SET offload_completed_at=NOW(), offload_scanned=$1, offload_missed=$2 WHERE id=$3', [scanned.length, missed.length, id]);
     }
 
-    // 이메일 발송 시도
+    // 2. 상세 기록 저장 (스캔된 것들)
+    for (const t of scanned) {
+      await pool.query('INSERT INTO scan_records (job_id, mode, tote_id, store_id) VALUES ($1, $2, $3, $4)', [id, mode, t.toteId, t.storeId]);
+    }
+
+    // 3. 상세 기록 저장 (누락된 것들)
+    for (const t of missed) {
+      await pool.query('INSERT INTO missed_records (job_id, mode, tote_id, store_id) VALUES ($1, $2, $3, $4)', [id, mode, t.toteId, t.storeId]);
+    }
+
+    // 4. 이메일 발송 시도
     if (process.env.SMTP_USER && process.env.ADMIN_EMAIL) {
       const mailOptions = {
-        from: process.env.SMTP_USER,
+        from: `"Tote Scanner" <${process.env.SMTP_USER}>`,
         to: process.env.ADMIN_EMAIL,
         subject: `[Tote Scanner] ${mode.toUpperCase()} Complete - ${id}`,
-        text: `Job ID: ${id}\nMode: ${mode}\nScanned: ${scanned.length}\nMissed: ${missed.length}\nTime: ${new Date().toLocaleString()}`
+        html: `
+          <h2>Operation Complete: ${mode.toUpperCase()}</h2>
+          <p><b>Job ID:</b> ${id}</p>
+          <p><b>Scanned:</b> ${scanned.length}</p>
+          <p><b>Missed:</b> ${missed.length}</p>
+          <p><b>Time:</b> ${new Date().toLocaleString()}</p>
+          <hr/>
+          <h3>Missed Totes List:</h3>
+          <ul>
+            ${missed.map(m => `<li>${m.toteId} (Store: ${m.storeId})</li>`).join('')}
+          </ul>
+        `
       };
       await transporter.sendMail(mailOptions);
+      console.log("Email sent successfully to", process.env.ADMIN_EMAIL);
     }
 
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { 
+    console.error("Complete Error:", err);
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
 app.get("*", (req, res) => {

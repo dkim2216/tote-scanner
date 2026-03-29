@@ -30,6 +30,9 @@ input:focus{outline:none}
 .nav-tab.active{color:#00C8F0}
 .nav-tab.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#00C8F0;border-radius:0 0 4px 4px}
 .list-item{background:#162338;padding:12px;border-radius:10px;border:1px solid #1E3050;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.verify-toggle{display:flex;background:#111E30;border-radius:10px;padding:4px;margin-bottom:20px;border:1px solid #1E3050}
+.verify-toggle button{flex:1;padding:10px;border:none;border-radius:8px;background:none;color:#5A7A9A;font-weight:bold;font-size:12px;transition:all .2s}
+.verify-toggle button.active{background:#00C8F0;color:#0A1628}
 </style>
 </head>
 <body>
@@ -41,12 +44,7 @@ const SP = ["#00C8F0","#FFB300","#00E676","#FF6B6B","#A78BFA","#F97316","#34D399
 const gc = (s, a) => SP[Math.max(0, a.indexOf(s)) % SP.length];
 
 const API = {
-  getJobs: async () => { 
-    try { 
-      const r = await fetch(window.location.origin + "/api/jobs"); 
-      return await r.json(); 
-    } catch(e) { console.error(e); return []; } 
-  },
+  getJobs: async () => { try { const r = await fetch(window.location.origin + "/api/jobs"); return await r.json(); } catch(e) { return []; } },
   createJob: async (no, label, totes) => {
     try {
       const r = await fetch(window.location.origin + "/api/jobs", {
@@ -54,9 +52,8 @@ const API = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manifest_no: no, label, totes })
       });
-      if (!r.ok) throw new Error('Network response was not ok');
       return await r.json();
-    } catch(e) { console.error(e); return null; }
+    } catch(e) { return null; }
   },
   completeJob: async (id, mode, scanned, missed) => {
     try {
@@ -66,10 +63,9 @@ const API = {
         body: JSON.stringify({ scanned, missed })
       });
       return await r.json();
-    } catch(e) { console.error(e); return null; }
+    } catch(e) { return null; }
   }
 };
-
 
 const Ring = ({pct, size=80, stroke=6, color=C.accent, label, sub}) => {
   const r = (size-stroke)/2, circ = 2*Math.PI*r, off = circ*(1-pct/100);
@@ -97,6 +93,7 @@ const SortCard = ({toteId, storeId, color}) => (
 
 function App() {
   const [tab, setTab] = useState("manifest");
+  const [verifyMode, setVerifyMode] = useState("load");
   const [manifest, setManifest] = useState(null);
   const [jobId, setJobId] = useState(null);
   const [lSess, setLSess] = useState({scanned: new Set(), log: [], completed: false});
@@ -186,6 +183,7 @@ function App() {
   }, [tab]);
 
   const currentSess = tab === "load" ? lSess : oSess;
+  const verifySess = verifyMode === "load" ? lSess : oSess;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg }}>
@@ -222,7 +220,7 @@ function App() {
                 <div style={{ display: "flex", gap: 15, marginBottom: 20 }}>
                   <Ring pct={Math.round((currentSess.scanned.size / manifest.length) * 100)} color={tab === "load" ? C.accent : C.amber} label={Math.round((currentSess.scanned.size / manifest.length) * 100) + "%"} sub={currentSess.scanned.size + "/" + manifest.length} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 18 }}>{tab.toUpperCase()} SCANNING</div>
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>{tab.toUpperCase() === "LOAD" ? "LOADING" : "OFFLOADING"} SCANNING</div>
                     <div style={{ fontSize: 10, color: currentSess.completed ? C.green : C.muted }}>{currentSess.completed ? "✓ COMPLETED" : "● IN PROGRESS"}</div>
                   </div>
                 </div>
@@ -258,15 +256,20 @@ function App() {
           <div className="fade-in">
             {!manifest ? <div style={{ textAlign: "center", marginTop: 50, color: C.muted }}>No manifest loaded</div> : (
               <>
-                <h3 style={{ fontSize: 12, color: C.muted, marginBottom: 15, letterSpacing: 2 }}>SCANNED LIST ({currentSess.scanned.size})</h3>
-                {manifest.filter(t => currentSess.scanned.has(t.toteId)).map(t => (
+                <div className="verify-toggle">
+                  <button className={verifyMode === "load" ? "active" : ""} onClick={() => setVerifyMode("load")}>LOAD VERIFY</button>
+                  <button className={verifyMode === "offload" ? "active" : ""} onClick={() => setVerifyMode("offload")}>OFFLOAD VERIFY</button>
+                </div>
+
+                <h3 style={{ fontSize: 12, color: C.muted, marginBottom: 15, letterSpacing: 2 }}>SCANNED LIST ({verifySess.scanned.size})</h3>
+                {manifest.filter(t => verifySess.scanned.has(t.toteId)).map(t => (
                   <div key={t.toteId} className="list-item">
                     <span style={{ fontWeight: "bold" }}>{t.toteId}</span>
                     <span style={{ color: C.accent, fontSize: 12 }}>{t.storeId}</span>
                   </div>
                 ))}
-                <h3 style={{ fontSize: 12, color: C.red, marginTop: 25, marginBottom: 15, letterSpacing: 2 }}>MISSED LIST ({manifest.length - currentSess.scanned.size})</h3>
-                {manifest.filter(t => !currentSess.scanned.has(t.toteId)).map(t => (
+                <h3 style={{ fontSize: 12, color: C.red, marginTop: 25, marginBottom: 15, letterSpacing: 2 }}>MISSED LIST ({manifest.length - verifySess.scanned.size})</h3>
+                {manifest.filter(t => !verifySess.scanned.has(t.toteId)).map(t => (
                   <div key={t.toteId} className="list-item" style={{ borderColor: C.red + "44" }}>
                     <span style={{ fontWeight: "bold", color: C.red }}>{t.toteId}</span>
                     <span style={{ color: C.muted, fontSize: 12 }}>{t.storeId}</span>

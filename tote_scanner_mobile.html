@@ -18,7 +18,7 @@
 html,body{height:100%;background:#050C18;color:#E2EAF8;font-family:'Rajdhani',sans-serif;overflow:hidden}
 #root{height:100%;display:flex;flex-direction:column}
 .scan-pulse{animation:pulse 1.6s ease-in-out infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 #00C8F055}50%{box-shadow:0 0 0 14px #00C8F000}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 #00C9A755}50%{box-shadow:0 0 0 14px #00C9A700}}
 .pop-in{animation:popIn .22s cubic-bezier(.34,1.56,.64,1 ) both}
 @keyframes popIn{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
 .store-flash{animation:sf .3s cubic-bezier(.34,1.56,.64,1) both}
@@ -28,21 +28,29 @@ html,body{height:100%;background:#050C18;color:#E2EAF8;font-family:'Rajdhani',sa
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#1E3050;border-radius:4px}
 input:focus{outline:none}
 .nav-tab{flex:1;padding:12px 0;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;color:#5A7A9A;font-weight:bold;font-size:10px;font-family:'Share Tech Mono',monospace}
-.nav-tab.active{color:#00C8F0}
-.nav-tab.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#00C8F0;border-radius:0 0 4px 4px}
+.nav-tab.active{color:#00C9A7}
+.nav-tab.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#00C9A7;border-radius:0 0 4px 4px}
 .list-item{background:#162338;padding:12px;border-radius:10px;border:1px solid #1E3050;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .verify-toggle{display:flex;background:#111E30;border-radius:10px;padding:4px;margin-bottom:20px;border:1px solid #1E3050}
 .verify-toggle button{flex:1;padding:10px;border:none;border-radius:8px;background:none;color:#5A7A9A;font-weight:bold;font-size:12px;transition:all .2s}
-.verify-toggle button.active{background:#00C8F0;color:#0A1628}
+.verify-toggle button.active{background:#00C9A7;color:#0A1628}
 #reader{width:100%;border-radius:12px;overflow:hidden;margin-bottom:15px;border:1px solid #1E3050;background:#000}
+h1, h2, h3{color:#0D1B4B}
+.btn-primary{border:2px solid #00C9A7;border-radius:20px;background:#00C9A7;color:#0A1628;font-weight:bold;transition:opacity .2s;cursor:pointer}
+.btn-primary:hover{opacity:0.8}
+.btn-secondary{border:2px solid #00C9A7;border-radius:20px;background:transparent;color:#00C9A7;font-weight:bold;transition:opacity .2s;cursor:pointer}
+.btn-secondary:hover{opacity:0.8}
+.status-green{border:2px solid #00E676;border-radius:12px}
+.status-yellow{border:2px solid #FFB300;border-radius:12px}
+.status-gray{border:2px solid #1E3050;border-radius:12px}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useMemo, useRef } = React;
-const C = { bg: "#0A1628", panel: "#111E30", card: "#162338", border: "#1E3050", accent: "#00C8F0", green: "#00E676", amber: "#FFB300", red: "#FF3D57", text: "#E2EAF8", muted: "#5A7A9A" };
-const SP = ["#00C8F0","#FFB300","#00E676","#FF6B6B","#A78BFA","#F97316","#34D399","#FB7185"];
+const C = { bg: "#0A1628", panel: "#111E30", card: "#162338", border: "#1E3050", accent: "#00C9A7", green: "#00E676", amber: "#FFB300", red: "#FF3D57", text: "#E2EAF8", muted: "#5A7A9A", navy: "#0D1B4B" };
+const SP = ["#00C9A7","#FFB300","#00E676","#FF6B6B","#A78BFA","#F97316","#34D399","#FB7185"];
 const gc = (s, a) => SP[Math.max(0, a.indexOf(s)) % SP.length];
 
 const API = {
@@ -231,16 +239,15 @@ function App() {
         {tab === "manifest" && (
           <div className="fade-in">
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>UPLOAD MANIFEST CSV</div>
-              <label className="btn-tap" style={{ display: "block", width: "100%", padding: "16px", background: C.card, border: `2px dashed ${C.border}`, borderRadius: 12, textAlign: "center", cursor: "pointer" }}>
+              <label style={{ display: "block", padding: "20px", background: C.card, border: `2px solid ${C.accent}`, borderRadius: 20, textAlign: "center", cursor: "pointer", transition: "opacity .2s" }} onMouseEnter={(e) => e.target.style.opacity = "0.8"} onMouseLeave={(e) => e.target.style.opacity = "1"}>
                 <span style={{ color: C.accent, fontWeight: "bold" }}>SELECT CSV FILE</span>
                 <input type="file" accept=".csv" onChange={handleCSV} style={{ display: "none" }} />
               </label>
             </div>
             <div style={{ textAlign: "center", color: C.muted, fontSize: 12, marginBottom: 20 }}>OR</div>
-            <button className="btn-tap" onClick={() => loadManifest([{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}], "Demo", "DEMO-001")} style={{ width: "100%", padding: "16px", background: C.accent, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628", marginBottom: 15 }}>LOAD DEMO MANIFEST</button>
+            <button className="btn-tap" onClick={() => loadManifest([{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},{toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},{toteId:"TOTE-005",storeId:"Store C"}], "Demo", "DEMO-001")} style={{ width: "100%", padding: "16px", background: C.accent, border: "2px solid " + C.accent, borderRadius: 20, fontWeight: "bold", color: "#0A1628", marginBottom: 15, transition: "opacity .2s", cursor: "pointer" }} onMouseEnter={(e) => e.target.style.opacity = "0.8"} onMouseLeave={(e) => e.target.style.opacity = "1"}>LOAD DEMO MANIFEST</button>
             {manifest && (
-              <div className="pop-in" style={{ background: C.card, padding: "15px", borderRadius: 12, border: `1px solid ${C.border}`, color: C.green, fontWeight: "bold" }}>● Manifest Active: {manifest.length} Totes</div>
+              <div className="pop-in status-green" style={{ background: C.card, padding: "15px", color: C.green, fontWeight: "bold" }}>● Manifest Active: {manifest.length} Totes</div>
             )}
           </div>
         )}
@@ -252,7 +259,7 @@ function App() {
                 <div style={{ display: "flex", gap: 15, marginBottom: 20 }}>
                   <Ring pct={Math.round((currentSess.scanned.size / manifest.length) * 100)} color={tab === "load" ? C.accent : C.amber} label={Math.round((currentSess.scanned.size / manifest.length) * 100) + "%"} sub={currentSess.scanned.size + "/" + manifest.length} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 18 }}>{tab.toUpperCase() === "LOAD" ? "LOADING" : "OFFLOADING"} SCANNING</div>
+                    <div style={{ fontWeight: 700, fontSize: 18, color: C.navy }}>SCANNING</div>
                     <div style={{ fontSize: 10, color: currentSess.completed ? C.green : C.muted }}>{currentSess.completed ? "✓ COMPLETED" : "● IN PROGRESS"}</div>
                   </div>
                 </div>
@@ -264,7 +271,7 @@ function App() {
                 <div className={currentSess.completed ? "" : "scan-pulse"} style={{ background: C.card, border: `2px solid ${tab === "load" ? C.accent : C.amber}`, borderRadius: 12, padding: "12px", display: "flex", gap: 10, marginBottom: 15 }}>
                   <input value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleScan(tab)} disabled={currentSess.completed} placeholder="Scan Tote ID..." style={{ flex: 1, background: "none", border: "none", color: "white", fontSize: 15 }} />
                   <button onClick={toggleCamera} style={{ background: "none", border: "none", color: C.accent, fontSize: 20 }}>📷</button>
-                  <button onClick={() => handleScan(tab)} style={{ background: tab === "load" ? C.accent : C.amber, border: "none", padding: "6px 15px", borderRadius: 8, fontWeight: "bold" }}>GO</button>
+                  <button onClick={() => handleScan(tab)} style={{ background: tab === "load" ? C.accent : C.amber, border: "2px solid " + (tab === "load" ? C.accent : C.amber), padding: "6px 15px", borderRadius: 12, fontWeight: "bold", color: "#0A1628", transition: "opacity .2s", cursor: "pointer" }} onMouseEnter={(e) => e.target.style.opacity = "0.8"} onMouseLeave={(e) => e.target.style.opacity = "1"}>GO</button>
                 </div>
 
                 <div ref={logRef} style={{ flex: 1, overflowY: "auto", marginBottom: 15 }}>
@@ -280,7 +287,7 @@ function App() {
                 </div>
 
                 {!currentSess.completed && (
-                  <button className="btn-tap" onClick={() => completeJob(tab)} disabled={loading} style={{ width: "100%", padding: "16px", background: C.green, border: "none", borderRadius: 12, fontWeight: "bold", color: "#0A1628" }}>{loading ? "SAVING..." : "COMPLETE " + tab.toUpperCase()}</button>
+                  <button className="btn-tap" onClick={() => completeJob(tab)} disabled={loading} style={{ width: "100%", padding: "16px", background: C.green, border: "2px solid " + C.green, borderRadius: 20, fontWeight: "bold", color: "#0A1628", transition: "opacity .2s", cursor: "pointer" }} onMouseEnter={(e) => e.target.style.opacity = "0.8"} onMouseLeave={(e) => e.target.style.opacity = "1"}>{loading ? "SAVING..." : "COMPLETE " + tab.toUpperCase()}</button>
                 )}
               </>
             )}
@@ -292,20 +299,20 @@ function App() {
             {!manifest ? <div style={{ textAlign: "center", marginTop: 50, color: C.muted }}>No manifest loaded</div> : (
               <>
                 <div className="verify-toggle">
-                  <button className={verifyMode === "load" ? "active" : ""} onClick={() => setVerifyMode("load")}>LOAD VERIFY</button>
-                  <button className={verifyMode === "offload" ? "active" : ""} onClick={() => setVerifyMode("offload")}>OFFLOAD VERIFY</button>
+                  <button className={verifyMode === "load" ? "active" : ""} onClick={() => setVerifyMode("load")} style={{ borderRadius: 12 }}>LOAD VERIFY</button>
+                  <button className={verifyMode === "offload" ? "active" : ""} onClick={() => setVerifyMode("offload")} style={{ borderRadius: 12 }}>OFFLOAD VERIFY</button>
                 </div>
 
                 <h3 style={{ fontSize: 12, color: C.muted, marginBottom: 15, letterSpacing: 2 }}>SCANNED LIST ({verifySess.scanned.size})</h3>
                 {manifest.filter(t => verifySess.scanned.has(t.toteId)).map(t => (
-                  <div key={t.toteId} className="list-item">
+                  <div key={t.toteId} className="list-item status-green">
                     <span style={{ fontWeight: "bold" }}>{t.toteId}</span>
                     <span style={{ color: C.accent, fontSize: 12 }}>{t.storeId}</span>
                   </div>
                 ))}
                 <h3 style={{ fontSize: 12, color: C.red, marginTop: 25, marginBottom: 15, letterSpacing: 2 }}>MISSED LIST ({manifest.length - verifySess.scanned.size})</h3>
                 {manifest.filter(t => !verifySess.scanned.has(t.toteId)).map(t => (
-                  <div key={t.toteId} className="list-item" style={{ borderColor: C.red + "44" }}>
+                  <div key={t.toteId} className="list-item status-yellow" style={{ borderColor: C.red + "44" }}>
                     <span style={{ fontWeight: "bold", color: C.red }}>{t.toteId}</span>
                     <span style={{ color: C.muted, fontSize: 12 }}>{t.storeId}</span>
                   </div>
@@ -319,7 +326,7 @@ function App() {
           <div className="fade-in">
             <h3 style={{ fontSize: 12, color: C.muted, marginBottom: 15, letterSpacing: 2 }}>NEON DB HISTORY</h3>
             {jobs.map(j => (
-              <div key={j.id} style={{ background: C.card, padding: "15px", borderRadius: 12, marginBottom: 10, border: `1px solid ${C.border}` }}>
+              <div key={j.id} className="status-gray" style={{ background: C.card, padding: "15px", marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <span style={{ fontWeight: "bold", color: C.accent }}>{j.manifest_no}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>{new Date(j.created_at).toLocaleDateString()}</span>

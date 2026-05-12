@@ -32,8 +32,6 @@ const pool = new Pool({
 pool.on("error", (err) => console.error("[DB] Pool error:", err.message));
 
 // ── Email transporter (created ONCE at startup) ───────────
-// FIX: was created inside the function — now module-level so
-//      missing env vars are caught immediately in Render logs.
 const transporter = nodemailer.createTransport({
   host:   process.env.SMTP_HOST || "smtp.gmail.com",
   port:   parseInt(process.env.SMTP_PORT  || "587"),
@@ -44,7 +42,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verify SMTP credentials on startup — shows clearly in Render logs
+// Verify SMTP credentials on startup
 async function verifySmtp() {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn("[EMAIL] ⚠ SMTP_USER or SMTP_PASS not set — emails will NOT be sent.");
@@ -59,14 +57,11 @@ async function verifySmtp() {
     console.log(`[EMAIL] ✓ SMTP verified  →  alerts will go to ${process.env.ADMIN_EMAIL}`);
   } catch (err) {
     console.error("[EMAIL] ✗ SMTP verify FAILED:", err.message);
-    console.error("[EMAIL]   Check SMTP_USER / SMTP_PASS in Render env vars.");
-    console.error("[EMAIL]   Gmail: use an App Password, NOT your account password.");
-    console.error("[EMAIL]   App Password guide → https://myaccount.google.com/apppasswords");
   }
 }
 
-// ── Send missed-totes alert ───────────────────────────────
-async function sendMissedAlert(job, mode, missedTotes) {
+// ── Send session alert ───────────────────────────────
+async function sendSessionAlert(job, mode, scannedTotes, missedTotes) {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.ADMIN_EMAIL) {
     console.warn("[EMAIL] Skipped — SMTP not fully configured.");
     return;
@@ -74,6 +69,7 @@ async function sendMissedAlert(job, mode, missedTotes) {
 
   const modeLabel = mode === "load" ? "Loading" : "Offloading";
   const dateStr   = new Date().toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" });
+  const isSuccess = missedTotes.length === 0;
 
   // Group missed totes by store
   const byStore = {};
@@ -89,11 +85,15 @@ async function sendMissedAlert(job, mode, missedTotes) {
       <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;text-align:right">${totes.length}</td>
     </tr>`).join("");
 
+  const statusColor = isSuccess ? "#00C9A7" : "#ef4444";
+  const statusText  = isSuccess ? "COMPLETED SUCCESSFULLY" : "COMPLETED WITH EXCEPTIONS";
+  const icon        = isSuccess ? "✅" : "⚠️";
+
   const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f3f4f6;font-family:sans-serif">
 <div style="max-width:600px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
   <div style="background:#0D1B4B;padding:24px 28px">
-    <h2 style="margin:0;color:#00C9A7;font-size:18px;letter-spacing:1px">⚠️ MISSED TOTES ALERT</h2>
-    <p style="margin:4px 0 0;color:#7b93c0;font-size:13px">${modeLabel} session completed with exceptions</p>
+    <h2 style="margin:0;color:${statusColor};font-size:18px;letter-spacing:1px">${icon} ${modeLabel.toUpperCase()} ${isSuccess ? 'SUCCESS' : 'ALERT'}</h2>
+    <p style="margin:4px 0 0;color:#7b93c0;font-size:13px">${statusText}</p>
   </div>
   <div style="padding:24px 28px">
     <table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:14px">
@@ -103,9 +103,13 @@ async function sendMissedAlert(job, mode, missedTotes) {
           <td style="color:#111">${dateStr}</td></tr>
       <tr><td style="padding:6px 0;color:#6b7280">Operation</td>
           <td style="color:#111">${modeLabel}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280">Scanned</td>
+          <td style="font-weight:700;color:#00C9A7;font-size:15px">${scannedTotes.length} tote(s)</td></tr>
       <tr><td style="padding:6px 0;color:#6b7280">Total Missed</td>
-          <td style="font-weight:700;color:#ef4444;font-size:15px">${missedTotes.length} tote(s)</td></tr>
+          <td style="font-weight:700;color:${statusColor};font-size:15px">${missedTotes.length} tote(s)</td></tr>
     </table>
+    
+    ${!isSuccess ? `
     <h3 style="margin:0 0 10px;font-size:13px;color:#374151;text-transform:uppercase;letter-spacing:1px">Missed Totes by Store</h3>
     <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;font-size:14px">
       <thead><tr style="background:#f9fafb">
@@ -115,6 +119,7 @@ async function sendMissedAlert(job, mode, missedTotes) {
       </tr></thead>
       <tbody>${storeRows}</tbody>
     </table>
+    ` : `<div style="padding:20px;background:#f0fdfa;border-radius:8px;color:#0f766e;text-align:center;font-weight:600">All totes were scanned correctly!</div>`}
   </div>
   <div style="background:#f9fafb;padding:14px 28px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af">
     Sent automatically by Tote Scanner · Job #${job.id}
@@ -122,29 +127,22 @@ async function sendMissedAlert(job, mode, missedTotes) {
 </div></body></html>`;
 
   try {
+    // Support multiple recipients by splitting ADMIN_EMAIL by comma
+    const recipients = process.env.ADMIN_EMAIL.split(",").map(email => email.trim());
+    
     const info = await transporter.sendMail({
       from:    `"Tote Scanner" <${process.env.SMTP_USER}>`,
-      to:      process.env.ADMIN_EMAIL,
-      subject: `[Alert] Missed Totes – ${job.manifest_no} – ${modeLabel}`,
+      to:      recipients,
+      subject: `${isSuccess ? '[Success]' : '[Alert]'} ${modeLabel} – ${job.manifest_no}`,
       html,
     });
-    console.log(`[EMAIL] ✓ Alert sent → ${process.env.ADMIN_EMAIL}  (messageId: ${info.messageId})`);
+    console.log(`[EMAIL] ✓ Alert sent to ${recipients.length} recipient(s) (messageId: ${info.messageId})`);
   } catch (err) {
     console.error("[EMAIL] ✗ sendMail FAILED:", err.message);
-    // Common causes logged clearly:
-    if (err.message.includes("535") || err.message.includes("Username and Password")) {
-      console.error("[EMAIL]   → Wrong password. Gmail requires an App Password, not your account password.");
-      console.error("[EMAIL]   → Create one at: https://myaccount.google.com/apppasswords");
-    }
-    if (err.message.includes("ECONNREFUSED") || err.message.includes("ETIMEDOUT")) {
-      console.error("[EMAIL]   → Cannot reach SMTP server. Check SMTP_HOST / SMTP_PORT.");
-    }
   }
 }
 
-// ══════════════════════════════════════════════════════════
-//  DATABASE INIT
-// ══════════════════════════════════════════════════════════
+// ── Database Init ──────────────────────────────────────────
 async function initDB() {
   const client = await pool.connect();
   try {
@@ -194,11 +192,7 @@ async function initDB() {
   }
 }
 
-// ══════════════════════════════════════════════════════════
-//  ROUTES
-// ══════════════════════════════════════════════════════════
-
-// Health check
+// ── Routes ──────────────────────────────────────────────────
 app.get("/health", (_req, res) =>
   res.json({
     status:      "ok",
@@ -210,37 +204,24 @@ app.get("/health", (_req, res) =>
   })
 );
 
-// ── TEST EMAIL (GET /api/test-email) ──────────────────────
-// Open in browser to verify SMTP works without pressing Complete.
-// e.g. https://tote-scanner-1.onrender.com/api/test-email
 app.get("/api/test-email", async (_req, res) => {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.ADMIN_EMAIL) {
-    return res.json({
-      success: false,
-      error:   "Missing env vars",
-      missing: {
-        SMTP_USER:   !process.env.SMTP_USER,
-        SMTP_PASS:   !process.env.SMTP_PASS,
-        ADMIN_EMAIL: !process.env.ADMIN_EMAIL,
-      },
-    });
+    return res.json({ success: false, error: "Missing env vars" });
   }
   try {
+    const recipients = process.env.ADMIN_EMAIL.split(",").map(email => email.trim());
     const info = await transporter.sendMail({
       from:    `"Tote Scanner Test" <${process.env.SMTP_USER}>`,
-      to:      process.env.ADMIN_EMAIL,
+      to:      recipients,
       subject: "[Tote Scanner] Test Email — SMTP is working ✓",
-      html:    `<p style="font-family:sans-serif">This is a test email from your Tote Scanner server.<br>If you received this, email alerts are working correctly.</p>`,
+      html:    `<p style="font-family:sans-serif">This is a test email from your Tote Scanner server.<br>If you received this, email alerts are working correctly for: ${recipients.join(", ")}</p>`,
     });
-    console.log(`[EMAIL] ✓ Test email sent → ${process.env.ADMIN_EMAIL}`);
-    res.json({ success: true, messageId: info.messageId, to: process.env.ADMIN_EMAIL });
+    res.json({ success: true, messageId: info.messageId, to: recipients });
   } catch (err) {
-    console.error("[EMAIL] ✗ Test email FAILED:", err.message);
     res.json({ success: false, error: err.message });
   }
 });
 
-// ── POST /api/jobs ────────────────────────────────────────
 app.post("/api/jobs", async (req, res) => {
   const { manifest_no, label, totes } = req.body;
   if (!manifest_no || !Array.isArray(totes) || !totes.length)
@@ -263,53 +244,27 @@ app.post("/api/jobs", async (req, res) => {
     }
 
     await client.query("COMMIT");
-    console.log(`[DB] Job #${jobId} created — manifest: ${manifest_no}, totes: ${totes.length}`);
-    res.json({ id: jobId, manifest_no, total_totes: totes.length });
+    res.json({ id: jobId });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("[POST /api/jobs]", err.message);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
   }
 });
 
-// ── GET /api/jobs ─────────────────────────────────────────
 app.get("/api/jobs", async (_req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT * FROM jobs ORDER BY created_at DESC LIMIT 200`
-    );
+    const { rows } = await pool.query(`SELECT * FROM jobs ORDER BY created_at DESC LIMIT 200`);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ── GET /api/jobs/:id ─────────────────────────────────────
-app.get("/api/jobs/:id", async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const job    = await client.query("SELECT * FROM jobs WHERE id=$1", [req.params.id]);
-    if (!job.rows.length) return res.status(404).json({ error: "Not found" });
-    const missed = await client.query(
-      "SELECT * FROM missed_records WHERE job_id=$1 ORDER BY mode,store_id,tote_id", [req.params.id]);
-    res.json({ ...job.rows[0], missed: missed.rows });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// ── POST /api/jobs/:id/complete/:mode ─────────────────────
 app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
   const { id, mode } = req.params;
-  if (!["load","offload"].includes(mode))
-    return res.status(400).json({ error: "mode must be load or offload" });
-
   const { scanned = [], missed = [] } = req.body;
-  console.log(`[COMPLETE] Job #${id} · mode=${mode} · scanned=${scanned.length} · missed=${missed.length}`);
 
   const client = await pool.connect();
   try {
@@ -319,7 +274,6 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
     await client.query("BEGIN");
 
-    // Batch insert scan records
     for (let i = 0; i < scanned.length; i += 100) {
       const chunk  = scanned.slice(i, i + 100);
       const vals   = chunk.map((_,j) => `($1,$2,$${j*2+3},$${j*2+4})`).join(",");
@@ -327,7 +281,6 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
       await client.query(`INSERT INTO scan_records(job_id,mode,tote_id,store_id) VALUES ${vals}`, params);
     }
 
-    // Batch insert missed records
     for (let i = 0; i < missed.length; i += 100) {
       const chunk  = missed.slice(i, i + 100);
       const vals   = chunk.map((_,j) => `($1,$2,$${j*2+3},$${j*2+4})`).join(",");
@@ -351,20 +304,14 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
     }
 
     await client.query("COMMIT");
-    console.log(`[DB] Job #${id} ${mode} complete — status: ${status}`);
 
-    // Send email alert for missed totes
-    if (missed.length > 0) {
-      console.log(`[EMAIL] Sending missed-tote alert for ${missed.length} tote(s)...`);
-      sendMissedAlert(job, mode, missed).catch(e => console.error("[EMAIL] Async error:", e.message));
-    } else {
-      console.log("[EMAIL] No missed totes — alert not needed.");
-    }
+    // Send email alert for EVERY session completion (success or missed)
+    console.log(`[EMAIL] Sending session alert for ${mode}...`);
+    sendSessionAlert(job, mode, scanned, missed).catch(e => console.error("[EMAIL] Async error:", e.message));
 
     res.json({ success: true, scanned: scanned.length, missed: missed.length, status });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(`[POST /api/jobs/${id}/complete/${mode}]`, err.message);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -377,9 +324,6 @@ initDB()
   .then(() =>
     app.listen(PORT, () => {
       console.log(`\n⬡  Tote Scanner →  http://localhost:${PORT}`);
-      console.log(`   DATABASE_URL : ${process.env.DATABASE_URL ? "✓ set" : "✗ NOT SET"}`);
-      console.log(`   SMTP_USER    : ${process.env.SMTP_USER    || "✗ NOT SET"}`);
-      console.log(`   ADMIN_EMAIL  : ${process.env.ADMIN_EMAIL  || "✗ NOT SET"}\n`);
     })
   )
   .catch((err) => {

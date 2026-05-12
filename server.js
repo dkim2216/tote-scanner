@@ -1,17 +1,20 @@
 /**
- * Tote Scanner — Backend Server v2 (Gmail Optimized)
- * Stack : Node.js + Express + Neon PostgreSQL + Nodemailer
+ * Tote Scanner — Backend Server v2 (Resend API Version)
+ * Stack : Node.js + Express + Neon PostgreSQL + Resend
  */
 
 require("dotenv").config();
 const express    = require("express");
 const { Pool }   = require("pg");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const cors       = require("cors");
 const path       = require("path");
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize Resend
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // ── Middleware ────────────────────────────────────────────
 app.use(cors({ origin: "*" }));
@@ -27,7 +30,6 @@ app.get("/tote_scanner_mobile.html", (req, res) => {
 });
 
 // ── Neon PostgreSQL pool ──────────────────────────────────
-// Fix: Added sslmode=verify-full to connection string if not present to silence warnings
 let dbUrl = process.env.DATABASE_URL;
 if (dbUrl && !dbUrl.includes("sslmode=")) {
   dbUrl += (dbUrl.includes("?") ? "&" : "?") + "sslmode=verify-full";
@@ -40,55 +42,14 @@ const pool = new Pool({
 });
 pool.on("error", (err) => console.error("[DB] Pool error:", err.message));
 
-// ── Email transporter (Gmail Optimized) ───────────────────
-// If using Gmail, 'service: gmail' is much more reliable than manual host/port
-const transporterConfig = process.env.SMTP_HOST && process.env.SMTP_HOST.includes("gmail") 
-  ? {
-      service: 'gmail',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      }
-    }
-  : {
-      host:   process.env.SMTP_HOST || "smtp.gmail.com",
-      port:   parseInt(process.env.SMTP_PORT || "587"),
-      secure: parseInt(process.env.SMTP_PORT) === 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false // Helps with some network restrictions
-      }
-    };
-
-const transporter = nodemailer.createTransport({
-  ...transporterConfig,
-  connectionTimeout: 20000, // Increased to 20s
-  greetingTimeout: 20000,
-  socketTimeout: 30000,
-});
-
-// Verify SMTP credentials on startup
-async function verifySmtp() {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn("[EMAIL] ⚠ SMTP_USER or SMTP_PASS not set.");
+// ── Send session alert (Resend API) ───────────────────────
+async function sendSessionAlert(job, mode, scannedTotes, missedTotes) {
+  if (!resend) {
+    console.warn("[EMAIL] Skipped — RESEND_API_KEY not set.");
     return;
   }
-  try {
-    await transporter.verify();
-    console.log(`[EMAIL] ✓ SMTP verified → alerts will go to ${process.env.ADMIN_EMAIL}`);
-  } catch (err) {
-    console.error("[EMAIL] ✗ SMTP verify FAILED:", err.message);
-    console.error("[EMAIL]   → Tip: Ensure you are using a 16-character App Password from Google.");
-  }
-}
-
-// ── Send session alert ───────────────────────────────
-async function sendSessionAlert(job, mode, scannedTotes, missedTotes) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.ADMIN_EMAIL) {
-    console.warn("[EMAIL] Skipped — SMTP not fully configured.");
+  if (!process.env.ADMIN_EMAIL) {
+    console.warn("[EMAIL] Skipped — ADMIN_EMAIL not set.");
     return;
   }
 
@@ -152,15 +113,21 @@ async function sendSessionAlert(job, mode, scannedTotes, missedTotes) {
 
   try {
     const recipients = process.env.ADMIN_EMAIL.split(",").map(email => email.trim());
-    const info = await transporter.sendMail({
-      from:    `"Tote Scanner" <${process.env.SMTP_USER}>`,
-      to:      recipients,
+    
+    const { data, error } = await resend.emails.send({
+      from: 'Tote Scanner <onboarding@resend.dev>', // Default for free accounts
+      to: recipients,
       subject: `${isSuccess ? '[Success]' : '[Alert]'} ${modeLabel} – ${job.manifest_no}`,
-      html,
+      html: html,
     });
-    console.log(`[EMAIL] ✓ Alert sent to ${recipients.length} recipient(s) (messageId: ${info.messageId})`);
+
+    if (error) {
+      console.error("[RESEND] ✗ Error:", error.message);
+    } else {
+      console.log(`[RESEND] ✓ Email sent to ${recipients.length} recipient(s) (ID: ${data.id})`);
+    }
   } catch (err) {
-    console.error("[EMAIL] ✗ sendMail FAILED:", err.message);
+    console.error("[RESEND] ✗ Unexpected error:", err.message);
   }
 }
 
@@ -220,25 +187,26 @@ app.get("/health", (_req, res) =>
     status:      "ok",
     ts:          new Date().toISOString(),
     db:          !!process.env.DATABASE_URL,
-    smtp_user:   !!process.env.SMTP_USER,
-    smtp_pass:   !!process.env.SMTP_PASS,
+    resend_key:  !!process.env.RESEND_API_KEY,
     admin_email: process.env.ADMIN_EMAIL || "NOT SET",
   })
 );
 
 app.get("/api/test-email", async (_req, res) => {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.ADMIN_EMAIL) {
-    return res.json({ success: false, error: "Missing env vars" });
+  if (!resend || !process.env.ADMIN_EMAIL) {
+    return res.json({ success: false, error: "Missing RESEND_API_KEY or ADMIN_EMAIL" });
   }
   try {
     const recipients = process.env.ADMIN_EMAIL.split(",").map(email => email.trim());
-    const info = await transporter.sendMail({
-      from:    `"Tote Scanner Test" <${process.env.SMTP_USER}>`,
-      to:      recipients,
-      subject: "[Tote Scanner] Test Email — SMTP is working ✓",
-      html:    `<p style="font-family:sans-serif">This is a test email from your Tote Scanner server.<br>If you received this, email alerts are working correctly for: ${recipients.join(", ")}</p>`,
+    const { data, error } = await resend.emails.send({
+      from: 'Tote Scanner <onboarding@resend.dev>',
+      to: recipients,
+      subject: "[Tote Scanner] Test Email — Resend is working ✓",
+      html: `<p style="font-family:sans-serif">This is a test email from your Tote Scanner server using Resend API.<br>If you received this, email alerts are working correctly for: ${recipients.join(", ")}</p>`,
     });
-    res.json({ success: true, messageId: info.messageId, to: recipients });
+
+    if (error) throw error;
+    res.json({ success: true, id: data.id, to: recipients });
   } catch (err) {
     res.json({ success: false, error: err.message });
   }
@@ -327,7 +295,7 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
     await client.query("COMMIT");
 
-    console.log(`[EMAIL] Sending session alert for ${mode}...`);
+    console.log(`[EMAIL] Sending session alert for ${mode} via Resend...`);
     sendSessionAlert(job, mode, scanned, missed).catch(e => console.error("[EMAIL] Async error:", e.message));
 
     res.json({ success: true, scanned: scanned.length, missed: missed.length, status });
@@ -341,10 +309,9 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
 // ── Boot ──────────────────────────────────────────────────
 initDB()
-  .then(() => verifySmtp())
   .then(() =>
     app.listen(PORT, () => {
-      console.log(`\n⬡  Tote Scanner →  http://localhost:${PORT}`);
+      console.log(`\n⬡  Tote Scanner (Resend API) →  http://localhost:${PORT}`);
     })
   )
   .catch((err) => {

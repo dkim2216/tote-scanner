@@ -17,16 +17,12 @@ const PORT = process.env.PORT || 3001;
 // ── Middleware ────────────────────────────────────────────
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "2mb" }));
-
-// Serve all static files in the current directory (manifest.json, icons, etc.)
 app.use(express.static(__dirname));
 
-// Route for the root URL
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
 });
 
-// Explicit route for the HTML file in case it's requested directly
 app.get("/tote_scanner_mobile.html", (req, res) => {
   res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
 });
@@ -41,32 +37,35 @@ const pool = new Pool({
 });
 pool.on("error", (err) => console.error("[DB] Pool error:", err.message));
 
-// ── Email transporter (created ONCE at startup) ───────────
+// ── Email transporter ─────────────────────────────────────
+const smtpPort = parseInt(process.env.SMTP_PORT || "587");
 const transporter = nodemailer.createTransport({
   host:   process.env.SMTP_HOST || "smtp.gmail.com",
-  port:   parseInt(process.env.SMTP_PORT  || "587"),
-  secure: false,
+  port:   smtpPort,
+  // Port 465 is for "Secure" (SSL), others use STARTTLS
+  secure: smtpPort === 465, 
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  // Add timeout settings to prevent hanging
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
 // Verify SMTP credentials on startup
 async function verifySmtp() {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn("[EMAIL] ⚠ SMTP_USER or SMTP_PASS not set — emails will NOT be sent.");
-    return;
-  }
-  if (!process.env.ADMIN_EMAIL) {
-    console.warn("[EMAIL] ⚠ ADMIN_EMAIL not set — alerts have no destination.");
+    console.warn("[EMAIL] ⚠ SMTP_USER or SMTP_PASS not set.");
     return;
   }
   try {
     await transporter.verify();
-    console.log(`[EMAIL] ✓ SMTP verified  →  alerts will go to ${process.env.ADMIN_EMAIL}`);
+    console.log(`[EMAIL] ✓ SMTP verified → alerts will go to ${process.env.ADMIN_EMAIL}`);
   } catch (err) {
     console.error("[EMAIL] ✗ SMTP verify FAILED:", err.message);
+    console.error("[EMAIL]   Check if your SMTP_HOST and SMTP_PORT are correct for your provider.");
   }
 }
 
@@ -81,7 +80,6 @@ async function sendSessionAlert(job, mode, scannedTotes, missedTotes) {
   const dateStr   = new Date().toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" });
   const isSuccess = missedTotes.length === 0;
 
-  // Group missed totes by store
   const byStore = {};
   missedTotes.forEach((t) => {
     if (!byStore[t.storeId]) byStore[t.storeId] = [];
@@ -313,7 +311,6 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
     await client.query("COMMIT");
 
-    // Send email alert for EVERY session completion (success or missed)
     console.log(`[EMAIL] Sending session alert for ${mode}...`);
     sendSessionAlert(job, mode, scanned, missed).catch(e => console.error("[EMAIL] Async error:", e.message));
 

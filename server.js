@@ -17,7 +17,9 @@ const PORT = process.env.PORT || 3001;
 // ── Middleware ────────────────────────────────────────────
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "2mb" }));
-app.use(express.static(path.join(__dirname, ".")));  // serves files from repo root
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
+});
 
 // ── Neon PostgreSQL pool ──────────────────────────────────
 const pool = new Pool({

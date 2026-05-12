@@ -17,7 +17,17 @@ const PORT = process.env.PORT || 3001;
 // ── Middleware ────────────────────────────────────────────
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "2mb" }));
+
+// Serve all static files in the current directory (manifest.json, icons, etc.)
+app.use(express.static(__dirname));
+
+// Route for the root URL
 app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
+});
+
+// Explicit route for the HTML file in case it's requested directly
+app.get("/tote_scanner_mobile.html", (req, res) => {
   res.sendFile(path.join(__dirname, "tote_scanner_mobile.html"));
 });
 
@@ -127,9 +137,7 @@ async function sendSessionAlert(job, mode, scannedTotes, missedTotes) {
 </div></body></html>`;
 
   try {
-    // Support multiple recipients by splitting ADMIN_EMAIL by comma
     const recipients = process.env.ADMIN_EMAIL.split(",").map(email => email.trim());
-    
     const info = await transporter.sendMail({
       from:    `"Tote Scanner" <${process.env.SMTP_USER}>`,
       to:      recipients,

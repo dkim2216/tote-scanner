@@ -1,7 +1,6 @@
 /**
- * Tote Scanner — Backend Server v2
+ * Tote Scanner — Backend Server v2 (Gmail Optimized)
  * Stack : Node.js + Express + Neon PostgreSQL + Nodemailer
- * Deploy: Render → https://tote-scanner-1.onrender.com
  */
 
 require("dotenv").config();
@@ -28,30 +27,47 @@ app.get("/tote_scanner_mobile.html", (req, res) => {
 });
 
 // ── Neon PostgreSQL pool ──────────────────────────────────
+// Fix: Added sslmode=verify-full to connection string if not present to silence warnings
+let dbUrl = process.env.DATABASE_URL;
+if (dbUrl && !dbUrl.includes("sslmode=")) {
+  dbUrl += (dbUrl.includes("?") ? "&" : "?") + "sslmode=verify-full";
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: dbUrl,
   ssl: { rejectUnauthorized: false },
   max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
 });
 pool.on("error", (err) => console.error("[DB] Pool error:", err.message));
 
-// ── Email transporter ─────────────────────────────────────
-const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+// ── Email transporter (Gmail Optimized) ───────────────────
+// If using Gmail, 'service: gmail' is much more reliable than manual host/port
+const transporterConfig = process.env.SMTP_HOST && process.env.SMTP_HOST.includes("gmail") 
+  ? {
+      service: 'gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      }
+    }
+  : {
+      host:   process.env.SMTP_HOST || "smtp.gmail.com",
+      port:   parseInt(process.env.SMTP_PORT || "587"),
+      secure: parseInt(process.env.SMTP_PORT) === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false // Helps with some network restrictions
+      }
+    };
+
 const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST || "smtp.gmail.com",
-  port:   smtpPort,
-  // Port 465 is for "Secure" (SSL), others use STARTTLS
-  secure: smtpPort === 465, 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  // Add timeout settings to prevent hanging
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
+  ...transporterConfig,
+  connectionTimeout: 20000, // Increased to 20s
+  greetingTimeout: 20000,
+  socketTimeout: 30000,
 });
 
 // Verify SMTP credentials on startup
@@ -65,7 +81,7 @@ async function verifySmtp() {
     console.log(`[EMAIL] ✓ SMTP verified → alerts will go to ${process.env.ADMIN_EMAIL}`);
   } catch (err) {
     console.error("[EMAIL] ✗ SMTP verify FAILED:", err.message);
-    console.error("[EMAIL]   Check if your SMTP_HOST and SMTP_PORT are correct for your provider.");
+    console.error("[EMAIL]   → Tip: Ensure you are using a 16-character App Password from Google.");
   }
 }
 

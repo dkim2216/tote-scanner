@@ -128,8 +128,8 @@ function generateExcel(job, mode, scannedTotes, missedTotes) {
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
 
-  // Return as base64 string for Resend attachment
-  return XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+  // Return as Buffer — Resend SDK accepts Buffer directly
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -260,28 +260,35 @@ async function sendMissedAlert(job, mode, scannedTotes, missedTotes) {
   </div>
 </div></body></html>`;
 
-  // Generate Excel
-  const xlsxBase64 = generateExcel(job, mode, scannedTotes, missedTotes);
-  const filename   = `tote_report_${job.manifest_no}_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  // Generate Excel as Buffer (Resend SDK requires Buffer, not base64 string)
+  const xlsxBuffer = generateExcel(job, mode, scannedTotes, missedTotes);
+  const filename   = `tote_report_${job.manifest_no.replace(/[^a-zA-Z0-9-]/g,"_")}_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  const fromAddr   = process.env.RESEND_FROM || "Tote Scanner <onboarding@resend.dev>";
+
+  console.log(`[EMAIL] Sending to: ${process.env.ADMIN_EMAIL}  from: ${fromAddr}`);
 
   try {
-    const result = await resend.emails.send({
-      from:        process.env.RESEND_FROM || "Tote Scanner <alerts@resend.dev>",
-      to:          [process.env.ADMIN_EMAIL],
+    const { data, error } = await resend.emails.send({
+      from:        fromAddr,
+      to:          process.env.ADMIN_EMAIL.split(",").map(e => e.trim()),
       subject:     hasMissed
         ? `[Alert] Missed Totes — ${job.manifest_no} — ${modeLabel}`
         : `[Complete] ${job.manifest_no} — ${modeLabel} All Clear`,
       html,
-      attachments: [
-        {
-          filename,
-          content: xlsxBase64,   // Resend accepts base64 string
-        },
-      ],
+      attachments: [{ filename, content: xlsxBuffer }],
     });
-    console.log(`[EMAIL] ✓ Sent → ${process.env.ADMIN_EMAIL}  (id: ${result.data?.id})`);
+
+    if (error) {
+      // Resend returns delivery errors in the response body — log them clearly
+      console.error("[EMAIL] ✗ Resend rejected:", JSON.stringify(error));
+      console.error("[EMAIL]   If error is 'validation_error' or 403: your ADMIN_EMAIL");
+      console.error("[EMAIL]   must be your verified Resend account email on the free plan.");
+    } else {
+      console.log(`[EMAIL] ✓ Accepted by Resend — id: ${data?.id}`);
+      console.log("[EMAIL]   Check resend.com/emails for delivery status");
+    }
   } catch (err) {
-    console.error("[EMAIL] ✗ Failed:", err.message);
+    console.error("[EMAIL] ✗ Exception thrown:", err.message);
   }
 }
 
@@ -485,8 +492,8 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
 // ── Boot ──────────────────────────────────────────────────
 initDB().then(() =>
-  app.listen(PORT, () => {
-    console.log(`\n⬡  Tote Scanner  →  http://localhost:${PORT}`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`\n⬡  Tote Scanner  →  http://0.0.0.0:${PORT}`);
     console.log(`   DATABASE_URL   : ${process.env.DATABASE_URL  ? "✓ set" : "✗ NOT SET"}`);
     console.log(`   RESEND_API_KEY : ${process.env.RESEND_API_KEY ? "✓ set" : "✗ NOT SET"}`);
     console.log(`   ADMIN_EMAIL    : ${process.env.ADMIN_EMAIL   || "✗ NOT SET"}`);

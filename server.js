@@ -55,15 +55,24 @@ function generateExcel(job, mode, scannedTotes, missedTotes) {
     [`Job ID: #${job.id}`],
     [],
     // Per-store summary table
-    ["Store", "Total Totes", "Scanned", "Missing", "Status"],
+    ["Store", "Total Totes", "Total Qty", "Scanned", "Scanned Qty", "Missing", "Missing Qty", "Status"],
     ...allStores.map(store => {
-      const sc = scannedTotes.filter(t => t.storeId === store).length;
-      const ms = missedTotes.filter(t => t.storeId === store).length;
-      return [store, sc + ms, sc, ms, ms === 0 ? "✓ Complete" : `✗ ${ms} Missing`];
+      const sc   = scannedTotes.filter(t => t.storeId === store);
+      const ms   = missedTotes.filter(t => t.storeId === store);
+      const scQty = sc.reduce((s,t) => s + (t.qty||0), 0);
+      const msQty = ms.reduce((s,t) => s + (t.qty||0), 0);
+      return [store, sc.length+ms.length, scQty+msQty, sc.length, scQty, ms.length, msQty,
+              ms.length === 0 ? "✓ Complete" : `✗ ${ms.length} Missing`];
     }),
     [],
     // Totals row
-    ["TOTAL", scannedTotes.length + missedTotes.length, scannedTotes.length, missedTotes.length,
+    ["TOTAL",
+     scannedTotes.length + missedTotes.length,
+     [...scannedTotes,...missedTotes].reduce((s,t)=>s+(t.qty||0),0),
+     scannedTotes.length,
+     scannedTotes.reduce((s,t)=>s+(t.qty||0),0),
+     missedTotes.length,
+     missedTotes.reduce((s,t)=>s+(t.qty||0),0),
      missedTotes.length === 0 ? "✓ All Clear" : `✗ ${missedTotes.length} Missing`],
   ];
 
@@ -71,26 +80,24 @@ function generateExcel(job, mode, scannedTotes, missedTotes) {
 
   // Column widths for summary
   wsSummary["!cols"] = [
-    { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 },
+    { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 18 },
   ];
 
   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
   // ── Sheet 2: All Totes (flat list) ────────────────────
   const allRows = [
-    ["Store", "Tote ID", "Status"],
-    // Scanned first, sorted by store then tote
+    ["Store", "Tote ID", "Qty", "Status"],
     ...[...scannedTotes]
       .sort((a, b) => a.storeId.localeCompare(b.storeId) || a.toteId.localeCompare(b.toteId))
-      .map(t => [t.storeId, t.toteId, "SCANNED"]),
-    // Missing next
+      .map(t => [t.storeId, t.toteId, t.qty||0, "SCANNED"]),
     ...[...missedTotes]
       .sort((a, b) => a.storeId.localeCompare(b.storeId) || a.toteId.localeCompare(b.toteId))
-      .map(t => [t.storeId, t.toteId, "MISSING"]),
+      .map(t => [t.storeId, t.toteId, t.qty||0, "MISSING"]),
   ];
 
   const wsAll = XLSX.utils.aoa_to_sheet(allRows);
-  wsAll["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 12 }];
+  wsAll["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 8 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, wsAll, "All Totes");
 
   // ── Sheet 3+: One sheet per store ────────────────────
@@ -106,22 +113,19 @@ function generateExcel(job, mode, scannedTotes, missedTotes) {
       [`${store} — ${modeLabel} Report`],
       [`Date: ${dateStr}   |   Manifest: ${job.manifest_no}`],
       [],
-      ["Tote ID", "Status"],
-      // Scanned
-      ...storeScanned.map(t => [t.toteId, "SCANNED"]),
-      // Blank separator only if both exist
+      ["Tote ID", "Qty", "Status"],
+      ...storeScanned.map(t => [t.toteId, t.qty||0, "SCANNED"]),
       ...(storeScanned.length > 0 && storeMissed.length > 0 ? [[]] : []),
-      // Missing
-      ...storeMissed.map(t => [t.toteId, "MISSING"]),
+      ...storeMissed.map(t => [t.toteId, t.qty||0, "MISSING"]),
       [],
-      // Footer totals
-      ["Scanned",  storeScanned.length],
-      ["Missing",  storeMissed.length],
-      ["Total",    storeScanned.length + storeMissed.length],
+      ["Scanned",       storeScanned.length, storeScanned.reduce((s,t)=>s+(t.qty||0),0)],
+      ["Missing",       storeMissed.length,  storeMissed.reduce((s,t)=>s+(t.qty||0),0)],
+      ["Total Totes",   storeScanned.length + storeMissed.length],
+      ["Total Qty",     [...storeScanned,...storeMissed].reduce((s,t)=>s+(t.qty||0),0)],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{ wch: 18 }, { wch: 12 }];
+    ws["!cols"] = [{ wch: 18 }, { wch: 8 }, { wch: 12 }];
 
     // Sheet name: Excel max 31 chars, strip special chars
     const sheetName = store.replace(/[\\/*?[\]:]/g, "").substring(0, 31);
@@ -150,15 +154,17 @@ async function sendMissedAlert(job, mode, scannedTotes, missedTotes) {
   const byStore = {};
   missedTotes.forEach(t => {
     if (!byStore[t.storeId]) byStore[t.storeId] = [];
-    byStore[t.storeId].push(t.toteId);
+    byStore[t.storeId].push(t);  // push full object for qty/scannedQty/totalQty access
   });
 
   // Per-store summary rows for email
   const storeEmailRows = allStores.map(store => {
-    const sc = scannedTotes.filter(t => t.storeId === store).length;
-    const ms = missedTotes.filter(t => t.storeId === store).length;
+    const scArr  = scannedTotes.filter(t => t.storeId === store);
+    const msArr  = missedTotes.filter(t => t.storeId === store);
+    const sc     = scArr.reduce((s,t) => s+(t.qty||1), 0);
+    const ms     = msArr.reduce((s,t) => s+(t.qty||1), 0);
     const statusColor = ms === 0 ? "#00C9A7" : "#ef4444";
-    const statusText  = ms === 0 ? "✓ Complete" : `✗ ${ms} missing`;
+    const statusText  = ms === 0 ? "✓ Complete" : `✗ ${ms} qty missing`;
     return `
       <tr>
         <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0D1B4B">${store}</td>
@@ -184,8 +190,12 @@ async function sendMissedAlert(job, mode, scannedTotes, missedTotes) {
         ${Object.entries(byStore).map(([store, totes]) => `
           <tr>
             <td style="padding:10px 14px;border-bottom:1px solid #fee2e2;font-weight:600;color:#0D1B4B;vertical-align:top">${store}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #fee2e2;color:#374151;font-family:monospace;font-size:12px">${totes.join("&nbsp;&nbsp;·&nbsp;&nbsp;")}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #fee2e2;text-align:right;color:#ef4444;font-weight:700">${totes.length}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #fee2e2;color:#374151;font-family:monospace;font-size:12px">
+              ${totes.map(t => `${t.toteId} <span style='color:#94a3b8'>(${t.scannedQty||0}/${t.totalQty||t.qty} scanned)</span>`).join('<br/>')}
+            </td>
+            <td style="padding:10px 14px;border-bottom:1px solid #fee2e2;text-align:right;color:#ef4444;font-weight:700;vertical-align:top">
+              -${totes.reduce((s,t)=>s+(t.qty||1),0)} qty
+            </td>
           </tr>`).join("")}
       </tbody>
     </table>` : "";
@@ -218,9 +228,9 @@ async function sendMissedAlert(job, mode, scannedTotes, missedTotes) {
       <tr><td style="padding:6px 0;color:#94a3b8">Operation</td>
           <td style="color:#1e293b">${modeLabel}</td></tr>
       <tr><td style="padding:6px 0;color:#94a3b8">Total Scanned</td>
-          <td style="font-weight:700;color:#00C9A7;font-size:15px">${scannedTotes.length}</td></tr>
+          <td style="font-weight:700;color:#00C9A7;font-size:15px">${scannedTotes.reduce((s,t)=>s+(t.qty||1),0)} qty (${scannedTotes.length} totes)</td></tr>
       <tr><td style="padding:6px 0;color:#94a3b8">Total Missing</td>
-          <td style="font-weight:700;color:${hasMissed ? "#ef4444" : "#94a3b8"};font-size:15px">${missedTotes.length}</td></tr>
+          <td style="font-weight:700;color:${hasMissed ? "#ef4444" : "#94a3b8"};font-size:15px">${missedTotes.reduce((s,t)=>s+(t.qty||1),0)} qty (${missedTotes.length} totes)</td></tr>
     </table>
 
     <!-- Per-store summary table -->
@@ -240,8 +250,8 @@ async function sendMissedAlert(job, mode, scannedTotes, missedTotes) {
       <tr style="background:#f8fafc;font-weight:700">
         <td style="padding:10px 14px;color:#0D1B4B">TOTAL</td>
         <td style="padding:10px 14px;text-align:center;color:#0D1B4B">${scannedTotes.length + missedTotes.length}</td>
-        <td style="padding:10px 14px;text-align:center;color:#00C9A7">${scannedTotes.length}</td>
-        <td style="padding:10px 14px;text-align:center;color:${hasMissed ? "#ef4444" : "#94a3b8"}">${missedTotes.length}</td>
+        <td style="padding:10px 14px;text-align:center;color:#00C9A7">${scannedTotes.reduce((s,t)=>s+(t.qty||1),0)}</td>
+        <td style="padding:10px 14px;text-align:center;color:${hasMissed ? "#ef4444" : "#94a3b8"}">${missedTotes.reduce((s,t)=>s+(t.qty||1),0)}</td>
         <td style="padding:10px 14px;text-align:center;color:${hasMissed ? "#ef4444" : "#00C9A7"}">${hasMissed ? `✗ ${missedTotes.length} Missing` : "✓ All Clear"}</td>
       </tr>
     </table>
@@ -317,7 +327,8 @@ async function initDB() {
         id       SERIAL PRIMARY KEY,
         job_id   INT  NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
         tote_id  TEXT NOT NULL,
-        store_id TEXT
+        store_id TEXT,
+        qty      INT  DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS scan_records (
         id         SERIAL PRIMARY KEY,
@@ -325,15 +336,25 @@ async function initDB() {
         mode       TEXT NOT NULL,
         tote_id    TEXT NOT NULL,
         store_id   TEXT,
+        qty        INT  DEFAULT 0,
         scanned_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE TABLE IF NOT EXISTS missed_records (
-        id        SERIAL PRIMARY KEY,
-        job_id    INT  NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-        mode      TEXT NOT NULL,
-        tote_id   TEXT NOT NULL,
-        store_id  TEXT
+        id          SERIAL PRIMARY KEY,
+        job_id      INT  NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        mode        TEXT NOT NULL,
+        tote_id     TEXT NOT NULL,
+        store_id    TEXT,
+        qty         INT  DEFAULT 0,
+        scanned_qty INT  DEFAULT 0,
+        total_qty   INT  DEFAULT 0
       );
+      -- Add qty column to existing tables if upgrading from older version
+      ALTER TABLE totes          ADD COLUMN IF NOT EXISTS qty         INT DEFAULT 0;
+      ALTER TABLE scan_records   ADD COLUMN IF NOT EXISTS qty         INT DEFAULT 0;
+      ALTER TABLE missed_records ADD COLUMN IF NOT EXISTS qty         INT DEFAULT 0;
+      ALTER TABLE missed_records ADD COLUMN IF NOT EXISTS scanned_qty INT DEFAULT 0;
+      ALTER TABLE missed_records ADD COLUMN IF NOT EXISTS total_qty   INT DEFAULT 0;
       CREATE INDEX IF NOT EXISTS idx_totes_job      ON totes(job_id);
       CREATE INDEX IF NOT EXISTS idx_scans_job_mode ON scan_records(job_id, mode);
       CREATE INDEX IF NOT EXISTS idx_missed_job     ON missed_records(job_id);
@@ -388,9 +409,9 @@ app.post("/api/jobs", async (req, res) => {
     const jobId = rows[0].id;
     for (let i = 0; i < totes.length; i += 100) {
       const chunk  = totes.slice(i, i + 100);
-      const vals   = chunk.map((_,j) => `($1,$${j*2+2},$${j*2+3})`).join(",");
-      const params = [jobId, ...chunk.flatMap(t => [t.toteId, t.storeId || ""])];
-      await client.query(`INSERT INTO totes(job_id,tote_id,store_id) VALUES ${vals}`, params);
+      const vals   = chunk.map((_,j) => `($1,$${j*3+2},$${j*3+3},$${j*3+4})`).join(",");
+      const params = [jobId, ...chunk.flatMap(t => [t.toteId, t.storeId||"", t.qty||0])];
+      await client.query(`INSERT INTO totes(job_id,tote_id,store_id,qty) VALUES ${vals}`, params);
     }
     await client.query("COMMIT");
     console.log(`[DB] Job #${jobId} created — ${manifest_no}, ${totes.length} totes`);
@@ -448,15 +469,24 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
     for (let i = 0; i < scanned.length; i += 100) {
       const chunk  = scanned.slice(i, i + 100);
-      const vals   = chunk.map((_,j) => `($1,$2,$${j*2+3},$${j*2+4})`).join(",");
-      const params = [id, mode, ...chunk.flatMap(t => [t.toteId, t.storeId || ""])];
-      await client.query(`INSERT INTO scan_records(job_id,mode,tote_id,store_id) VALUES ${vals}`, params);
+      const vals   = chunk.map((_,j) => `($1,$2,$${j*3+3},$${j*3+4},$${j*3+5})`).join(",");
+      const params = [id, mode, ...chunk.flatMap(t => [t.toteId, t.storeId||"", t.qty||0])];
+      await client.query(`INSERT INTO scan_records(job_id,mode,tote_id,store_id,qty) VALUES ${vals}`, params);
     }
     for (let i = 0; i < missed.length; i += 100) {
       const chunk  = missed.slice(i, i + 100);
-      const vals   = chunk.map((_,j) => `($1,$2,$${j*2+3},$${j*2+4})`).join(",");
-      const params = [id, mode, ...chunk.flatMap(t => [t.toteId, t.storeId || ""])];
-      await client.query(`INSERT INTO missed_records(job_id,mode,tote_id,store_id) VALUES ${vals}`, params);
+      const vals   = chunk.map((_,j) => `($1,$2,$${j*5+3},$${j*5+4},$${j*5+5},$${j*5+6},$${j*5+7})`).join(",");
+      const params = [id, mode, ...chunk.flatMap(t => [
+        t.toteId,
+        t.storeId    || "",
+        t.qty        || 0,
+        t.scannedQty || 0,
+        t.totalQty   || 0,
+      ])];
+      await client.query(
+        `INSERT INTO missed_records(job_id,mode,tote_id,store_id,qty,scanned_qty,total_qty) VALUES ${vals}`,
+        params
+      );
     }
 
     const otherDone = mode === "load" ? !!job.offload_completed_at : !!job.load_completed_at;
@@ -465,12 +495,12 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
     if (mode === "load") {
       await client.query(
         `UPDATE jobs SET load_completed_at=NOW(),load_scanned=$1,load_missed=$2,status=$3 WHERE id=$4`,
-        [scanned.length, missed.length, status, id]
+        [scanned.reduce((s,t)=>s+(t.qty||1),0), missed.reduce((s,t)=>s+(t.qty||1),0), status, id]
       );
     } else {
       await client.query(
         `UPDATE jobs SET offload_completed_at=NOW(),offload_scanned=$1,offload_missed=$2,status=$3 WHERE id=$4`,
-        [scanned.length, missed.length, status, id]
+        [scanned.reduce((s,t)=>s+(t.qty||1),0), missed.reduce((s,t)=>s+(t.qty||1),0), status, id]
       );
     }
 

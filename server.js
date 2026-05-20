@@ -506,9 +506,8 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
     await client.query("COMMIT");
 
-    // Send email with Excel attachment (always — even if no missed totes)
-    sendMissedAlert(job, mode, scanned, missed)
-      .catch(e => console.error("[EMAIL] Async error:", e.message));
+    // Email is sent at Route level via POST /api/routes/send-report
+    // Individual store completion does NOT trigger an email.
 
     res.json({ success: true, scanned: scanned.length, missed: missed.length, status });
   } catch (err) {
@@ -517,6 +516,212 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+
+// ── POST /api/routes/send-report ─────────────────────────
+// Called when supervisor presses "Complete Route & Send Report".
+// Aggregates all stores in the route, generates Excel, sends one email.
+app.post("/api/routes/send-report", async (req, res) => {
+  const { routeName, manifestNo, date, stores } = req.body;
+  // stores: [{storeId, scanned:[{toteId,storeId,qty}], missed:[{toteId,storeId,qty,scannedQty,totalQty}]}]
+
+  if (!routeName || !Array.isArray(stores) || !stores.length)
+    return res.status(400).json({ error: "routeName and stores[] are required" });
+
+  console.log(`[ROUTE] Sending report for ${routeName} — ${stores.length} stores`);
+
+  // Aggregate all scanned/missed across stores
+  const allScanned = stores.flatMap(s => s.scanned || []);
+  const allMissed  = stores.flatMap(s => s.missed  || []);
+  const hasMissed  = allMissed.length > 0;
+
+  const dateStr = date || new Date().toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" });
+  const allStoreIds = stores.map(s => s.storeId);
+
+  // ── Build Excel ────────────────────────────────────────
+  const XLSX = require("xlsx");
+  const wb   = XLSX.utils.book_new();
+
+  // Summary sheet
+  const summaryRows = [
+    [`Route Report — ${routeName}`],
+    [`Manifest: ${manifestNo || "—"}`],
+    [`Date: ${dateStr}`],
+    [],
+    ["Store", "Total Totes", "Total Qty", "Scanned", "Scanned Qty", "Missing", "Missing Qty", "Status"],
+    ...stores.map(s => {
+      const sc    = s.scanned || [];
+      const ms    = s.missed  || [];
+      const scQty = sc.reduce((sum,t) => sum + (t.qty||0), 0);
+      const msQty = ms.reduce((sum,t) => sum + (t.qty||0), 0);
+      return [s.storeId, sc.length+ms.length, scQty+msQty, sc.length, scQty, ms.length, msQty,
+              ms.length === 0 ? "✓ Complete" : `✗ ${ms.length} Missing`];
+    }),
+    [],
+    ["TOTAL",
+     allScanned.length + allMissed.length,
+     [...allScanned,...allMissed].reduce((s,t)=>s+(t.qty||0),0),
+     allScanned.length,
+     allScanned.reduce((s,t)=>s+(t.qty||0),0),
+     allMissed.length,
+     allMissed.reduce((s,t)=>s+(t.qty||0),0),
+     allMissed.length === 0 ? "✓ All Clear" : `✗ ${allMissed.length} Missing`],
+  ];
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+  wsSummary["!cols"] = [{wch:16},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+  // All totes sheet
+  const allRows = [
+    ["Store", "Tote ID", "Qty", "Status"],
+    ...[...allScanned]
+      .sort((a,b) => a.storeId.localeCompare(b.storeId) || a.toteId.localeCompare(b.toteId))
+      .map(t => [t.storeId, t.toteId, t.qty||0, "SCANNED"]),
+    ...[...allMissed]
+      .sort((a,b) => a.storeId.localeCompare(b.storeId) || a.toteId.localeCompare(b.toteId))
+      .map(t => [t.storeId, t.toteId, t.qty||0, `MISSING (${t.scannedQty||0}/${t.totalQty||t.qty})`]),
+  ];
+  const wsAll = XLSX.utils.aoa_to_sheet(allRows);
+  wsAll["!cols"] = [{wch:16},{wch:16},{wch:8},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsAll, "All Totes");
+
+  // Per-store sheets
+  stores.forEach(s => {
+    const sc = (s.scanned||[]).sort((a,b)=>a.toteId.localeCompare(b.toteId));
+    const ms = (s.missed||[]).sort((a,b)=>a.toteId.localeCompare(b.toteId));
+    const rows = [
+      [`${s.storeId} — ${routeName}`],
+      [`Date: ${dateStr}`],
+      [],
+      ["Tote ID", "Qty", "Status"],
+      ...sc.map(t => [t.toteId, t.qty||0, "SCANNED"]),
+      ...(sc.length>0&&ms.length>0?[[]]:  []),
+      ...ms.map(t => [t.toteId, t.qty||0, `MISSING (${t.scannedQty||0}/${t.totalQty||t.qty})`]),
+      [],
+      ["Scanned", sc.length, sc.reduce((sum,t)=>sum+(t.qty||0),0)],
+      ["Missing", ms.length, ms.reduce((sum,t)=>sum+(t.qty||0),0)],
+      ["Total",   sc.length+ms.length, [...sc,...ms].reduce((sum,t)=>sum+(t.qty||0),0)],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{wch:16},{wch:8},{wch:24}];
+    XLSX.utils.book_append_sheet(wb, ws, s.storeId.replace(/[\\/*?[\]:]/g,"").substring(0,31));
+  });
+
+  const xlsxBuffer = XLSX.write(wb, { type:"buffer", bookType:"xlsx" });
+  const filename   = `route_report_${routeName.replace(/[^a-zA-Z0-9-]/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`;
+
+  // ── Build email HTML ───────────────────────────────────
+  const storeRows = stores.map(s => {
+    const sc    = s.scanned||[];
+    const ms    = s.missed||[];
+    const scQty = sc.reduce((sum,t)=>sum+(t.qty||0),0);
+    const msQty = ms.reduce((sum,t)=>sum+(t.qty||0),0);
+    const ok    = ms.length===0;
+    return `<tr>
+      <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0D1B4B">${s.storeId}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:center;color:#1e293b">${sc.length+ms.length}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:center;color:#00C9A7;font-weight:600">${scQty}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:center;color:${msQty>0?"#ef4444":"#94a3b8"};font-weight:600">${msQty}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:center;color:${ok?"#00C9A7":"#ef4444"};font-weight:700">${ok?"✓ Complete":`✗ ${ms.length} Missing`}</td>
+    </tr>`;
+  }).join("");
+
+  const totalScQty = allScanned.reduce((s,t)=>s+(t.qty||0),0);
+  const totalMsQty = allMissed.reduce((s,t)=>s+(t.qty||0),0);
+
+  const missedDetail = hasMissed ? `
+    <h3 style="margin:24px 0 10px;font-size:13px;color:#1e293b;text-transform:uppercase;letter-spacing:1px">Missing Tote Detail</h3>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;font-size:13px">
+      <thead><tr style="background:#fff5f5">
+        <th style="padding:9px 12px;text-align:left;color:#ef4444;border-bottom:1px solid #fee2e2">Store</th>
+        <th style="padding:9px 12px;text-align:left;color:#ef4444;border-bottom:1px solid #fee2e2">Tote ID</th>
+        <th style="padding:9px 12px;text-align:center;color:#ef4444;border-bottom:1px solid #fee2e2">Scanned</th>
+        <th style="padding:9px 12px;text-align:right;color:#ef4444;border-bottom:1px solid #fee2e2">Missing Qty</th>
+      </tr></thead>
+      <tbody>
+        ${allMissed.map(t=>`<tr>
+          <td style="padding:9px 12px;border-bottom:1px solid #fee2e2;font-weight:600;color:#0D1B4B">${t.storeId}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #fee2e2;font-family:monospace;color:#374151">${t.toteId}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #fee2e2;text-align:center;color:#94a3b8">${t.scannedQty||0}/${t.totalQty||t.qty}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #fee2e2;text-align:right;color:#ef4444;font-weight:700">-${t.qty} qty</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>` : "";
+
+  const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f8fafc;font-family:sans-serif">
+<div style="max-width:640px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08)">
+  <div style="background:#0D1B4B;padding:28px">
+    <h2 style="margin:0;color:#00C9A7;font-size:18px;letter-spacing:1px">${hasMissed?"⚠️ ROUTE REPORT — EXCEPTIONS":"✅ ROUTE COMPLETE — ALL CLEAR"}</h2>
+    <p style="margin:4px 0 0;color:#7b93c0;font-size:13px">${routeName} · ${manifestNo||"—"}</p>
+  </div>
+  <div style="padding:24px 28px">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:14px">
+      <tr><td style="padding:6px 0;color:#94a3b8;width:130px">Route</td>
+          <td style="font-weight:700;color:#0D1B4B;font-size:16px">${routeName}</td></tr>
+      <tr><td style="padding:6px 0;color:#94a3b8">Manifest</td>
+          <td style="color:#1e293b">${manifestNo||"—"}</td></tr>
+      <tr><td style="padding:6px 0;color:#94a3b8">Date</td>
+          <td style="color:#1e293b">${dateStr}</td></tr>
+      <tr><td style="padding:6px 0;color:#94a3b8">Stores</td>
+          <td style="color:#1e293b">${stores.length}</td></tr>
+      <tr><td style="padding:6px 0;color:#94a3b8">Total Scanned</td>
+          <td style="font-weight:700;color:#00C9A7;font-size:15px">${totalScQty} qty (${allScanned.length} totes)</td></tr>
+      <tr><td style="padding:6px 0;color:#94a3b8">Total Missing</td>
+          <td style="font-weight:700;color:${hasMissed?"#ef4444":"#94a3b8"};font-size:15px">${totalMsQty} qty (${allMissed.length} totes)</td></tr>
+    </table>
+    <h3 style="margin:0 0 10px;font-size:13px;color:#1e293b;text-transform:uppercase;letter-spacing:1px">Store Summary</h3>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;font-size:13px">
+      <thead><tr style="background:#f8fafc">
+        <th style="padding:10px 14px;text-align:left;color:#1e293b;border-bottom:1px solid #e2e8f0">Store</th>
+        <th style="padding:10px 14px;text-align:center;color:#1e293b;border-bottom:1px solid #e2e8f0">Total</th>
+        <th style="padding:10px 14px;text-align:center;color:#00C9A7;border-bottom:1px solid #e2e8f0">Scanned Qty</th>
+        <th style="padding:10px 14px;text-align:center;color:#ef4444;border-bottom:1px solid #e2e8f0">Missing Qty</th>
+        <th style="padding:10px 14px;text-align:center;color:#1e293b;border-bottom:1px solid #e2e8f0">Status</th>
+      </tr></thead>
+      <tbody>${storeRows}</tbody>
+    </table>
+    ${missedDetail}
+    <div style="margin-top:20px;background:#f0fdf9;border:1px solid #00C9A730;border-radius:10px;padding:12px 16px;font-size:13px;color:#1e293b">
+      📎 <strong>Excel report attached</strong> — includes per-store sheets with full tote breakdown.
+    </div>
+  </div>
+  <div style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8">
+    Sent automatically by Tote Scanner · ${routeName} · ${new Date().toISOString().slice(0,10)}
+  </div>
+</div></body></html>`;
+
+  // ── Send via Resend ────────────────────────────────────
+  if (!process.env.RESEND_API_KEY || !process.env.ADMIN_EMAIL) {
+    console.warn("[ROUTE EMAIL] Not configured — skipping send.");
+    return res.json({ success: true, emailSent: false, reason: "SMTP not configured" });
+  }
+
+  const { Resend } = require("resend");
+  const resend     = new Resend(process.env.RESEND_API_KEY);
+  const fromAddr   = process.env.RESEND_FROM || "Tote Scanner <onboarding@resend.dev>";
+  const recipients = process.env.ADMIN_EMAIL.split(",").map(e=>e.trim());
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from:        fromAddr,
+      to:          recipients,
+      subject:     hasMissed
+        ? `[Alert] ${routeName} — Missed Totes — ${manifestNo||"—"}`
+        : `[Complete] ${routeName} — All Clear — ${manifestNo||"—"}`,
+      html,
+      attachments: [{ filename, content: xlsxBuffer }],
+    });
+    if (error) {
+      console.error("[ROUTE EMAIL] Resend error:", JSON.stringify(error));
+      return res.json({ success: true, emailSent: false, error: error.message });
+    }
+    console.log(`[ROUTE EMAIL] ✓ Sent for ${routeName} → ${recipients.join(", ")} (id: ${data?.id})`);
+    res.json({ success: true, emailSent: true, id: data?.id });
+  } catch (err) {
+    console.error("[ROUTE EMAIL] Exception:", err.message);
+    res.json({ success: true, emailSent: false, error: err.message });
   }
 });
 

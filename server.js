@@ -278,7 +278,7 @@ async function sendMissedAlert(job, mode, scannedTotes, missedTotes) {
   console.log(`[EMAIL] Sending to: ${process.env.ADMIN_EMAIL}  from: ${fromAddr}`);
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await resendClient.emails.send({
       from:        fromAddr,
       to:          process.env.ADMIN_EMAIL.split(",").map(e => e.trim()),
       subject:     hasMissed
@@ -541,7 +541,6 @@ app.post("/api/routes/send-report", async (req, res) => {
   const allStoreIds = stores.map(s => s.storeId);
 
   // ── Build Excel ────────────────────────────────────────
-  const XLSX = require("xlsx");
   const wb   = XLSX.utils.book_new();
 
   // Summary sheet
@@ -698,13 +697,12 @@ app.post("/api/routes/send-report", async (req, res) => {
     return res.json({ success: true, emailSent: false, reason: "SMTP not configured" });
   }
 
-  const { Resend } = require("resend");
-  const resend     = new Resend(process.env.RESEND_API_KEY);
+  const resendClient = new Resend(process.env.RESEND_API_KEY);
   const fromAddr   = process.env.RESEND_FROM || "Tote Scanner <onboarding@resend.dev>";
   const recipients = process.env.ADMIN_EMAIL.split(",").map(e=>e.trim());
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await resendClient.emails.send({
       from:        fromAddr,
       to:          recipients,
       subject:     hasMissed
@@ -725,13 +723,17 @@ app.post("/api/routes/send-report", async (req, res) => {
   }
 });
 
-// ── Boot ──────────────────────────────────────────────────
-initDB().then(() =>
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n⬡  Tote Scanner  →  http://0.0.0.0:${PORT}`);
-    console.log(`   DATABASE_URL   : ${process.env.DATABASE_URL  ? "✓ set" : "✗ NOT SET"}`);
-    console.log(`   RESEND_API_KEY : ${process.env.RESEND_API_KEY ? "✓ set" : "✗ NOT SET"}`);
-    console.log(`   ADMIN_EMAIL    : ${process.env.ADMIN_EMAIL   || "✗ NOT SET"}`);
-    console.log(`   RESEND_FROM    : ${process.env.RESEND_FROM   || "(using default)"}\n`);
-  })
-).catch(err => { console.error("[FATAL]", err.message); process.exit(1); });
+// ── Boot — start server FIRST so Render detects the port,
+//           then init DB. This prevents "No open ports" errors. ──
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`\n⬡  Tote Scanner  →  http://0.0.0.0:${PORT}`);
+  console.log(`   DATABASE_URL   : ${process.env.DATABASE_URL  ? "✓ set" : "✗ NOT SET"}`);
+  console.log(`   RESEND_API_KEY : ${process.env.RESEND_API_KEY ? "✓ set" : "✗ NOT SET"}`);
+  console.log(`   ADMIN_EMAIL    : ${process.env.ADMIN_EMAIL   || "✗ NOT SET"}`);
+  console.log(`   RESEND_FROM    : ${process.env.RESEND_FROM   || "(using default)"}\n`);
+
+  // Init DB after server is already listening
+  initDB()
+    .then(() => console.log("[DB] ✓ Ready"))
+    .catch(err => console.error("[DB] ✗ Init failed (server still running):", err.message));
+});

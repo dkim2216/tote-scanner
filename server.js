@@ -467,6 +467,10 @@ app.post("/api/jobs/:id/complete/:mode", async (req, res) => {
 
     await client.query("BEGIN");
 
+    // Delete existing records so re-saves don't create duplicates (supports interim saves)
+    await client.query("DELETE FROM scan_records   WHERE job_id=$1 AND mode=$2", [id, mode]);
+    await client.query("DELETE FROM missed_records  WHERE job_id=$1 AND mode=$2", [id, mode]);
+
     for (let i = 0; i < scanned.length; i += 100) {
       const chunk  = scanned.slice(i, i + 100);
       const vals   = chunk.map((_,j) => `($1,$2,$${j*3+3},$${j*3+4},$${j*3+5})`).join(",");

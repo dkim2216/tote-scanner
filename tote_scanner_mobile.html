@@ -32,19 +32,18 @@ input:focus{outline:none}
 .nav-tab{flex:1;padding:10px 0;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;color:#94a3b8;font-size:9px;font-family:'Share Tech Mono',monospace;letter-spacing:.5px}
 .nav-tab.active{color:#00C9A7}
 .nav-tab.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#00C9A7;border-radius:0 0 4px 4px}
-/* Overlay / Modal */
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:400;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
-.modal-sheet{background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:24px 20px 36px;max-height:80vh;overflow-y:auto;box-shadow:0 -8px 32px rgba(0,0,0,.12)}
-/* Verify toggle */
-.v-toggle{display:flex;background:#f1f5f9;border-radius:12px;padding:4px;border:1px solid #e2e8f0;margin-bottom:20px}
+.modal-sheet{background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:24px 20px 36px;max-height:82vh;overflow-y:auto;box-shadow:0 -8px 32px rgba(0,0,0,.12)}
+.v-toggle{display:flex;background:#f1f5f9;border-radius:12px;padding:4px;border:1px solid #e2e8f0;margin-bottom:16px}
 .v-toggle button{flex:1;padding:9px;border:none;border-radius:10px;background:none;color:#94a3b8;font-weight:700;font-size:12px;transition:all .2s;cursor:pointer;font-family:'Rajdhani',sans-serif}
 .v-toggle button.active{background:#00C9A7;color:#fff}
-/* Store card expand */
 .store-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .store-card-header{display:flex;justify-content:space-between;align-items:center;padding:14px;cursor:pointer}
 .store-card-body{border-top:1px solid #f1f5f9;padding:0 14px}
-.tote-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f8fafc;font-size:13px}
+.tote-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f8fafc}
 .tote-row:last-child{border-bottom:none}
+/* Table header row */
+.th{fontFamily:"'Share Tech Mono',monospace";fontSize:9px;color:#94a3b8;letterSpacing:1px}
 </style>
 </head>
 <body>
@@ -75,6 +74,30 @@ const API={
   },
 };
 
+// ── Parse CSV — now reads tote_id, store_id, qty ─────────
+function parseCSV(txt){
+  const lines=txt.trim().split(/\r?\n/).filter(l=>l.trim());
+  // detect header
+  const firstCols=lines[0].toLowerCase().split(",").map(s=>s.trim());
+  const hasHeader=firstCols.includes("tote_id")||firstCols.includes("toteid");
+  const dataLines=hasHeader?lines.slice(1):lines;
+  return dataLines.reduce((a,l)=>{
+    const[c1="",c2="",c3=""]=l.split(",").map(s=>s.trim());
+    const toteId=c1.toUpperCase();
+    if(!toteId)return a;
+    a.push({toteId,storeId:c2||"Unknown",qty:parseInt(c3)||0});
+    return a;
+  },[]);
+}
+
+const DEMO=[
+  {toteId:"TOTE-001",storeId:"Store A",qty:24},{toteId:"TOTE-002",storeId:"Store A",qty:12},
+  {toteId:"TOTE-003",storeId:"Store A",qty:36},{toteId:"TOTE-004",storeId:"Store B",qty:18},
+  {toteId:"TOTE-005",storeId:"Store B",qty:30},{toteId:"TOTE-006",storeId:"Store B",qty:6},
+  {toteId:"TOTE-007",storeId:"Store C",qty:48},{toteId:"TOTE-008",storeId:"Store C",qty:24},
+  {toteId:"WH-A001", storeId:"Store A",qty:20},{toteId:"WH-B001", storeId:"Store B",qty:14},
+];
+
 // ── Ring ──────────────────────────────────────────────────
 const Ring=({pct,size=76,stroke=6,color=C.accent,label,sub})=>{
   const r=(size-stroke)/2,ci=2*Math.PI*r,off=ci*(1-pct/100);
@@ -94,27 +117,44 @@ const Ring=({pct,size=76,stroke=6,color=C.accent,label,sub})=>{
   );
 };
 
-// ── Sort card ─────────────────────────────────────────────
-const SortCard=({toteId,storeId,color})=>(
+// ── Sort card — now shows qty ─────────────────────────────
+const SortCard=({toteId,storeId,qty,count,color})=>{
+  const pct=qty?Math.round((count/qty)*100):0;
+  const done=count>=qty;
+  return(
   <div className="store-flash" style={{background:`linear-gradient(135deg,${color}18,${color}05)`,
-    border:`2.5px solid ${color}`,borderRadius:16,padding:"12px 16px",marginBottom:10,
+    border:`2.5px solid ${done?C.green:color}`,borderRadius:16,padding:"14px 16px",marginBottom:10,
     textAlign:"center",boxShadow:`0 4px 20px ${color}22`}}>
     <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,letterSpacing:4,color:C.muted,marginBottom:2}}>SORT TO</div>
-    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:50,color,lineHeight:1,marginBottom:3}}>{storeId}</div>
-    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.muted}}>{toteId}</div>
+    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:50,color:done?C.green:color,lineHeight:1,marginBottom:4}}>{storeId}</div>
+    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.muted,marginBottom:8}}>{toteId}</div>
+    {/* Scan progress */}
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+      <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:28,
+        color:done?C.green:color,lineHeight:1}}>
+        {count} <span style={{fontSize:16,color:C.muted}}>/ {qty}</span>
+      </div>
+      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:done?C.green:C.muted,letterSpacing:2}}>
+        {done?"✓ TOTE COMPLETE":"SCANS DONE"}
+      </div>
+      {/* Mini progress bar */}
+      <div style={{width:"80%",height:6,background:"#e2e8f0",borderRadius:4,overflow:"hidden",marginTop:2}}>
+        <div style={{height:"100%",width:pct+"%",borderRadius:4,
+          background:done?C.green:color,transition:"width .3s ease"}}/>
+      </div>
+    </div>
   </div>
-);
+);};
 
 // ── Confirm modal ─────────────────────────────────────────
 const ConfirmModal=({mode,scannedCount,missedList,allStores,onConfirm,onCancel})=>{
   const modeLabel=mode==="load"?"LOADING":"OFFLOADING";
   const byStore={};
-  missedList.forEach(t=>{if(!byStore[t.storeId])byStore[t.storeId]=[];byStore[t.storeId].push(t.toteId);});
+  missedList.forEach(t=>{if(!byStore[t.storeId])byStore[t.storeId]=[];byStore[t.storeId].push(t);});
   const hasMissed=missedList.length>0;
   return(
     <div className="overlay" onClick={onCancel}>
       <div className="modal-sheet pop-in" onClick={e=>e.stopPropagation()}>
-        {/* Icon + title */}
         <div style={{textAlign:"center",marginBottom:20}}>
           <div style={{width:56,height:56,borderRadius:"50%",
             background:hasMissed?`${C.red}15`:`${C.green}15`,
@@ -131,53 +171,55 @@ const ConfirmModal=({mode,scannedCount,missedList,allStores,onConfirm,onCancel})
           </div>
         </div>
 
-        {/* Summary pills */}
         <div style={{display:"flex",gap:10,marginBottom:16}}>
-          <div style={{flex:1,background:`${C.green}12`,border:`1px solid ${C.green}30`,
-            borderRadius:12,padding:"10px",textAlign:"center"}}>
+          <div style={{flex:1,background:`${C.green}12`,border:`1px solid ${C.green}30`,borderRadius:12,padding:"10px",textAlign:"center"}}>
             <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:22,color:C.green}}>{scannedCount}</div>
             <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>SCANNED</div>
           </div>
           <div style={{flex:1,background:hasMissed?`${C.red}12`:`${C.green}12`,
-            border:`1px solid ${hasMissed?C.red:C.green}30`,
-            borderRadius:12,padding:"10px",textAlign:"center"}}>
-            <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:22,color:hasMissed?C.red:C.green}}>{missedList.length}</div>
-            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>MISSING</div>
+            border:`1px solid ${hasMissed?C.red:C.green}30`,borderRadius:12,padding:"10px",textAlign:"center"}}>
+            <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:22,color:hasMissed?C.red:C.green}}>
+              {missedList.reduce((s,t)=>s+(t.qty||1),0)}
+            </div>
+            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>QTY MISSING</div>
           </div>
         </div>
 
-        {/* Missing breakdown by store */}
         {hasMissed&&(
           <div style={{marginBottom:18}}>
-            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,letterSpacing:2,marginBottom:8}}>
-              MISSING TOTES BY STORE
-            </div>
+            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,letterSpacing:2,marginBottom:8}}>MISSING BY STORE</div>
             <div style={{background:"#fff5f5",border:`1px solid ${C.red}25`,borderRadius:12,overflow:"hidden"}}>
-              {Object.entries(byStore).map(([store,totes],i,arr)=>(
-                <div key={store} style={{padding:"10px 14px",
-                  borderBottom:i<arr.length-1?"1px solid #fee2e2":"none",
-                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.navy}}>{store}</div>
-                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted,marginTop:2}}>
-                      {totes.join("  ·  ")}
-                    </div>
+              {/* Header */}
+              <div style={{display:"flex",padding:"8px 14px",borderBottom:"1px solid #fee2e2",background:"#fef2f2"}}>
+                <span style={{flex:2,fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red}}>STORE</span>
+                <span style={{flex:2,fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red}}>TOTE ID</span>
+                <span style={{flex:1,fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,textAlign:"right"}}>QTY</span>
+              </div>
+              {Object.entries(byStore).map(([store,totes])=>
+                totes.map((t,i)=>(
+                  <div key={t.toteId} style={{display:"flex",alignItems:"center",
+                    padding:"8px 14px",borderBottom:"1px solid #fee2e2",gap:8}}>
+                    <span style={{flex:2,fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,color:C.navy}}>
+                      {i===0?store:""}
+                    </span>
+                    <span style={{flex:2,fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.red}}>{t.toteId}</span>
+                    <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted}}>
+                      {t.scannedQty||0}/{t.totalQty||t.qty} scanned
+                    </span>
+                    <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,
+                      color:C.red,background:"#fee2e2",borderRadius:20,padding:"2px 8px",flexShrink:0}}>
+                      -{t.qty} qty
+                    </span>
                   </div>
-                  <div style={{background:`${C.red}15`,border:`1px solid ${C.red}30`,
-                    borderRadius:20,padding:"3px 10px",
-                    fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,color:C.red,flexShrink:0,marginLeft:10}}>
-                    -{totes.length}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,marginTop:8,textAlign:"center"}}>
-              Admin will be notified by email
+              Admin will be notified by email with Excel report
             </div>
           </div>
         )}
 
-        {/* Buttons */}
         <div style={{display:"flex",gap:10}}>
           <button className="btn-tap" onClick={onCancel} style={{flex:1,
             background:C.light,border:`1px solid ${C.border}`,borderRadius:14,
@@ -196,8 +238,8 @@ const ConfirmModal=({mode,scannedCount,missedList,allStores,onConfirm,onCancel})
   );
 };
 
-// ── Store perspective card (Verify tab) ───────────────────
-const StoreVerifyCard=({store,color,scanned,missed,total})=>{
+// ── Store verify card with qty ────────────────────────────
+const StoreVerifyCard=({store,color,scanned,missed,total,totalQty,scannedQty,missedQty})=>{
   const[open,setOpen]=useState(false);
   const pct=total?Math.round((scanned.length/total)*100):0;
   const allOk=missed.length===0;
@@ -205,61 +247,68 @@ const StoreVerifyCard=({store,color,scanned,missed,total})=>{
     <div className="store-card">
       <div className="store-card-header btn-tap" onClick={()=>setOpen(o=>!o)}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          {/* Colour dot */}
-          <div style={{width:10,height:10,borderRadius:"50%",background:color,flexShrink:0,
-            boxShadow:`0 0 6px ${color}80`}}/>
+          <div style={{width:10,height:10,borderRadius:"50%",background:color,flexShrink:0,boxShadow:`0 0 6px ${color}80`}}/>
           <div>
             <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:16,color:C.navy}}>{store}</div>
             <div style={{display:"flex",gap:10,marginTop:2}}>
-              <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.green}}>✓ {scanned.length} scanned</span>
+              <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.green}}>✓ {scanned.length} totes</span>
               {missed.length>0&&<span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red}}>✗ {missed.length} missing</span>}
+            </div>
+            {/* Qty summary */}
+            <div style={{display:"flex",gap:8,marginTop:3}}>
+              <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>QTY scanned: <span style={{color:C.green,fontWeight:700}}>{scannedQty}</span></span>
+              {missedQty>0&&<span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>missing: <span style={{color:C.red,fontWeight:700}}>{missedQty}</span></span>}
             </div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {/* Mini ring */}
-          <Ring pct={pct} size={44} stroke={4} color={allOk?C.green:C.red}
-            label={`${pct}%`}/>
-          <span style={{color:C.muted,fontSize:12,transition:"transform .2s",
-            display:"inline-block",transform:open?"rotate(180deg)":"none"}}>▾</span>
+          <Ring pct={pct} size={44} stroke={4} color={allOk?C.green:C.red} label={`${pct}%`}/>
+          <span style={{color:C.muted,fontSize:12,display:"inline-block",transform:open?"rotate(180deg)":"none"}}>▾</span>
         </div>
       </div>
 
       {open&&(
         <div className="store-card-body slide-up">
-          {/* Scanned */}
-          {scanned.length>0&&(
-            <>
-              <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.green,
-                letterSpacing:2,padding:"10px 0 6px"}}>SCANNED ({scanned.length})</div>
-              {scanned.map(id=>(
-                <div key={id} className="tote-row">
-                  <span style={{fontFamily:"'Share Tech Mono',monospace",color:C.text,fontSize:13}}>{id}</span>
-                  <span style={{background:`${C.green}15`,border:`1px solid ${C.green}30`,
-                    borderRadius:20,padding:"2px 10px",fontFamily:"'Rajdhani',sans-serif",
-                    fontWeight:700,fontSize:11,color:C.green}}>OK</span>
-                </div>
-              ))}
-            </>
-          )}
-          {/* Missing */}
-          {missed.length>0&&(
-            <>
-              <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,
-                letterSpacing:2,padding:"10px 0 6px"}}>MISSING ({missed.length})</div>
-              {missed.map(id=>(
-                <div key={id} className="tote-row">
-                  <span style={{fontFamily:"'Share Tech Mono',monospace",color:C.red,fontSize:13}}>{id}</span>
-                  <span style={{background:`${C.red}12`,border:`1px solid ${C.red}25`,
-                    borderRadius:20,padding:"2px 10px",fontFamily:"'Rajdhani',sans-serif",
-                    fontWeight:700,fontSize:11,color:C.red}}>MISSING</span>
-                </div>
-              ))}
-            </>
-          )}
-          {scanned.length===0&&missed.length===0&&(
-            <div style={{padding:"12px 0",fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.muted}}>No totes for this store</div>
-          )}
+          {/* Column headers */}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0 4px",
+            borderBottom:`1px solid ${C.border}`}}>
+            <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,flex:2}}>TOTE ID</span>
+            <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,textAlign:"center",flex:1}}>QTY</span>
+            <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,textAlign:"right",flex:1}}>STATUS</span>
+          </div>
+
+          {/* Scanned totes */}
+          {scanned.map(t=>(
+            <div key={t.toteId} className="tote-row">
+              <span style={{fontFamily:"'Share Tech Mono',monospace",color:C.text,fontSize:12,flex:2}}>{t.toteId}</span>
+              <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.navy,textAlign:"center",flex:1}}>{t.qty||"—"}</span>
+              <div style={{flex:1,display:"flex",justifyContent:"flex-end"}}>
+                <span style={{background:`${C.green}15`,border:`1px solid ${C.green}30`,
+                  borderRadius:20,padding:"2px 10px",fontFamily:"'Rajdhani',sans-serif",
+                  fontWeight:700,fontSize:11,color:C.green}}>OK</span>
+              </div>
+            </div>
+          ))}
+
+          {/* Missing totes */}
+          {missed.map(t=>(
+            <div key={t.toteId} className="tote-row">
+              <span style={{fontFamily:"'Share Tech Mono',monospace",color:C.red,fontSize:12,flex:2}}>{t.toteId}</span>
+              <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.red,textAlign:"center",flex:1}}>{t.qty||"—"}</span>
+              <div style={{flex:1,display:"flex",justifyContent:"flex-end"}}>
+                <span style={{background:`${C.red}12`,border:`1px solid ${C.red}25`,
+                  borderRadius:20,padding:"2px 10px",fontFamily:"'Rajdhani',sans-serif",
+                  fontWeight:700,fontSize:11,color:C.red}}>MISSING</span>
+              </div>
+            </div>
+          ))}
+
+          {/* Store qty totals footer */}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",
+            borderTop:`1px solid ${C.border}`,marginTop:4}}>
+            <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>TOTAL QTY</span>
+            <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.navy}}>{totalQty}</span>
+          </div>
         </div>
       )}
     </div>
@@ -272,25 +321,30 @@ const StoreVerifyCard=({store,color,scanned,missed,total})=>{
 function App(){
   const[tab,setTab]=useState("manifest");
   const[verifyMode,setVerifyMode]=useState("load");
-  const[verifyView,setVerifyView]=useState("store"); // "store" | "tote"
+  const[verifyView,setVerifyView]=useState("store");
   const[manifest,setManifest]=useState(null);
   const[jobId,setJobId]=useState(null);
-  const[lSess,setLSess]=useState({scanned:new Set(),log:[],completed:false,last:null});
-  const[oSess,setOSess]=useState({scanned:new Set(),log:[],completed:false,last:null});
+  const[lSess,setLSess]=useState({scanned:new Map(),log:[],completed:false,last:null});
+  const[oSess,setOSess]=useState({scanned:new Map(),log:[],completed:false,last:null});
   const[jobs,setJobs]=useState([]);
   const[jobDetail,setJobDetail]=useState(null);
   const[scanInput,setScanInput]=useState("");
   const[cameraActive,setCameraActive]=useState(false);
-  const[confirm,setConfirm]=useState(null); // {mode, scanned, missed}
+  const[confirm,setConfirm]=useState(null);
   const[saving,setSaving]=useState(false);
   const logRef=useRef();
   const scannerRef=useRef(null);
+
+  // Map for quick tote lookup: toteId → {storeId, qty}
+  const toteMap=useMemo(()=>{
+    if(!manifest)return new Map();
+    return new Map(manifest.map(t=>[t.toteId,t]));
+  },[manifest]);
 
   const allStores=useMemo(()=>manifest?[...new Set(manifest.map(t=>t.storeId))].sort():[],[manifest]);
 
   useEffect(()=>{if(logRef.current)logRef.current.scrollTop=0;},[lSess.log,oSess.log]);
 
-  // Camera toggle
   const toggleCamera=()=>{
     if(cameraActive){
       if(scannerRef.current){scannerRef.current.stop().then(()=>{setCameraActive(false);scannerRef.current=null;});}
@@ -300,113 +354,116 @@ function App(){
         const qr=new Html5Qrcode("reader");
         scannerRef.current=qr;
         qr.start({facingMode:"environment"},{fps:10,qrbox:{width:250,height:150}},
-          (text)=>{setScanInput(text);handleScan(tab,text);},
-          ()=>{}
+          (text)=>{setScanInput(text);handleScan(tab,text);},()=>{}
         ).catch(()=>setCameraActive(false));
       },100);
     }
   };
 
-  // Load manifest
   const loadManifest=async(totes,label,no)=>{
     setSaving(true);
     const res=await API.createJob(no,label,totes);
     setSaving(false);
-    if(res&&res.id){
-      setJobId(res.id);
-      setManifest(totes);
-      setLSess({scanned:new Set(),log:[],completed:false,last:null});
-      setOSess({scanned:new Set(),log:[],completed:false,last:null});
-      setTab("load");
-    }else{
-      // offline fallback — still allow scanning
-      setManifest(totes);
-      setLSess({scanned:new Set(),log:[],completed:false,last:null});
-      setOSess({scanned:new Set(),log:[],completed:false,last:null});
-      setTab("load");
-    }
+    setManifest(totes);
+    setLSess({scanned:new Map(),log:[],completed:false,last:null});
+    setOSess({scanned:new Map(),log:[],completed:false,last:null});
+    if(res&&res.id)setJobId(res.id);
+    setTab("load");
   };
 
   const handleCSV=e=>{
     const file=e.target.files[0];if(!file)return;
     const r=new FileReader();
     r.onload=ev=>{
-      const totes=ev.target.result.split('\n').filter(l=>l.trim()).slice(1).map(l=>{
-        const[toteId,storeId]=l.split(',').map(s=>s.trim());
-        return{toteId,storeId};
-      }).filter(t=>t.toteId);
-      if(!totes.length){alert("No totes found in CSV.");return;}
+      const totes=parseCSV(ev.target.result);
+      if(!totes.length){alert("No valid totes found.\n\nExpected format:\ntote_id,store_id,qty");return;}
       loadManifest(totes,file.name,file.name.split('.')[0]);
     };
-    r.readAsText(file);
-    e.target.value="";
+    r.readAsText(file);e.target.value="";
   };
 
-  // Scan logic
   const handleScan=useCallback((mode,override)=>{
     const id=(override||scanInput).trim().toUpperCase();
     if(!id||!manifest)return;
     const sess=mode==="load"?lSess:oSess;
     const setSess=mode==="load"?setLSess:setOSess;
     if(sess.completed)return;
-    const item=manifest.find(t=>t.toteId===id);
+    const item=toteMap.get(id);
     const time=new Date().toLocaleTimeString("en-GB",{hour12:false});
     if(!item){
       setSess(s=>({...s,log:[{time,msg:"NOT IN MANIFEST: "+id,type:"error"},...s.log]}));
-    }else if(sess.scanned.has(id)){
-      setSess(s=>({...s,log:[{time,msg:"DUPLICATE: "+id,type:"warn"},...s.log]}));
     }else{
-      const ns=new Set(sess.scanned);ns.add(id);
-      const color=gc(item.storeId,allStores);
-      setSess(s=>({...s,scanned:ns,last:{id,store:item.storeId,color},
-        log:[{time,msg:"✓ "+id,store:item.storeId,color,type:"ok"},...s.log]}));
+      const maxQty=item.qty||1;
+      const currentCount=sess.scanned.get(id)||0;
+      if(currentCount>=maxQty){
+        // Already fully scanned
+        setSess(s=>({...s,log:[{time,msg:`⚠ ALREADY COMPLETE: ${id}  [${maxQty}/${maxQty}]`,type:"warn"},...s.log]}));
+      }else{
+        const newCount=currentCount+1;
+        const newMap=new Map(sess.scanned);
+        newMap.set(id,newCount);
+        const color=gc(item.storeId,allStores);
+        const done=newCount>=maxQty;
+        setSess(s=>({...s,scanned:newMap,
+          last:{id,store:item.storeId,qty:maxQty,count:newCount,color},
+          log:[{time,
+            msg:`✓ ${id}  [${newCount}/${maxQty}]${done?" ✓ COMPLETE":""}`,
+            store:item.storeId,qty:maxQty,count:newCount,color,
+            type:"ok"},...s.log]}));
+      }
     }
     setScanInput("");
-  },[scanInput,manifest,lSess,oSess,allStores]);
+  },[scanInput,manifest,lSess,oSess,allStores,toteMap]);
 
-  // Press complete — show confirmation modal
   const pressComplete=mode=>{
-    const sess=mode==="load"?lSess:oSess;
     if(!manifest)return;
-    const scannedList=manifest.filter(t=>sess.scanned.has(t.toteId));
-    const missedList=manifest.filter(t=>!sess.scanned.has(t.toteId));
+    const sess=mode==="load"?lSess:oSess;
+    // Build scanned list: each tote gets its scanned count as qty
+    const scannedList=[];
+    const missedList=[];
+    manifest.forEach(t=>{
+      const maxQty=t.qty||1;
+      const count=sess.scanned.get(t.toteId)||0;
+      if(count>0) scannedList.push({toteId:t.toteId,storeId:t.storeId,qty:count});
+      const missing=maxQty-count;
+      if(missing>0) missedList.push({toteId:t.toteId,storeId:t.storeId,qty:missing,scannedQty:count,totalQty:maxQty});
+    });
     setConfirm({mode,scannedList,missedList});
   };
 
-  // After user confirms in modal
   const doComplete=async()=>{
     const{mode,scannedList,missedList}=confirm;
-    setConfirm(null);
-    setSaving(true);
+    setConfirm(null);setSaving(true);
     const setSess=mode==="load"?setLSess:setOSess;
-    if(jobId){
-      await API.completeMode(jobId,mode,scannedList,missedList);
-    }
+    if(jobId)await API.completeMode(jobId,mode,scannedList,missedList);
     setSess(s=>({...s,completed:true}));
     setSaving(false);
   };
 
-  // History
   useEffect(()=>{if(tab==="history")API.getJobs().then(setJobs);},[tab]);
 
-  const openDetail=async id=>{
-    const d=await API.getJob(id);
-    setJobDetail(d);
-  };
+  const openDetail=async id=>{const d=await API.getJob(id);setJobDetail(d);};
 
   const currentSess=tab==="load"?lSess:oSess;
   const verifySess=verifyMode==="load"?lSess:oSess;
 
-  // Build store data for verify store view
+  // Store data for verify with qty totals
   const storeVerifyData=useMemo(()=>{
     if(!manifest)return[];
     return allStores.map(store=>{
-      const totesForStore=manifest.filter(t=>t.storeId===store);
-      const scanned=totesForStore.filter(t=>verifySess.scanned.has(t.toteId)).map(t=>t.toteId);
-      const missed=totesForStore.filter(t=>!verifySess.scanned.has(t.toteId)).map(t=>t.toteId);
-      return{store,scanned,missed,total:totesForStore.length,color:gc(store,allStores)};
+      const forStore=manifest.filter(t=>t.storeId===store);
+      const scanned=forStore.filter(t=>(verifySess.scanned.get(t.toteId)||0)>=(t.qty||1));
+      const missed=forStore.filter(t=>!(verifySess.scanned.get(t.toteId)||0)>=(t.qty||1));
+      const totalQty=forStore.reduce((s,t)=>s+(t.qty||0),0);
+      const scannedQty=scanned.reduce((s,t)=>s+(t.qty||0),0);
+      const missedQty=missed.reduce((s,t)=>s+(t.qty||0),0);
+      return{store,scanned,missed,total:forStore.length,totalQty,scannedQty,missedQty,color:gc(store,allStores)};
     });
   },[manifest,allStores,verifySess]);
+
+  // Grand qty totals for verify summary
+  const totalQty=manifest?manifest.reduce((s,t)=>s+(t.qty||0),0):0;
+  const scannedQty=[...verifySess.scanned].reduce((s,id)=>s+(toteMap.get(id)?.qty||0),0);
 
   const fmt=dt=>dt?new Date(dt).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
 
@@ -420,16 +477,11 @@ function App(){
         <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted}}>
           {new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
         </span>
-        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.navy,letterSpacing:2}}>
-          TOTE SCANNER
-        </span>
-        <div style={{width:8,height:8,borderRadius:"50%",
-          background:manifest?C.accent:C.muted,
-          boxShadow:manifest?`0 0 8px ${C.accent}`:"none"}}/>
+        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.navy,letterSpacing:2}}>TOTE SCANNER</span>
+        <div style={{width:8,height:8,borderRadius:"50%",background:manifest?C.accent:C.muted,boxShadow:manifest?`0 0 8px ${C.accent}`:"none"}}/>
       </div>
 
-      {/* Screen content */}
-      <div style={{flex:1,overflowY:"auto",padding:"18px 16px",position:"relative"}}>
+      <div style={{flex:1,overflowY:"auto",padding:"18px 16px"}}>
 
         {/* ── MANIFEST TAB ─────────────────────────── */}
         {tab==="manifest"&&(
@@ -440,37 +492,69 @@ function App(){
                 boxShadow:`0 2px 12px ${C.accent}18`}}>
                 <div style={{fontSize:24,marginBottom:6}}>📄</div>
                 <span style={{color:C.accent,fontWeight:700,letterSpacing:1,fontFamily:"'Rajdhani',sans-serif",fontSize:15}}>SELECT CSV FILE</span>
-                <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted,marginTop:4}}>tote_id, store_id columns</div>
+                <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted,marginTop:6}}>
+                  Format: tote_id, store_id, qty
+                </div>
                 <input type="file" accept=".csv" onChange={handleCSV} style={{display:"none"}}/>
               </label>
             </div>
 
+            {/* CSV format reminder */}
+            <div style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:12,
+              padding:"10px 14px",marginBottom:16,fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted}}>
+              <div style={{marginBottom:4,color:C.navy,fontWeight:700,fontFamily:"'Rajdhani',sans-serif",fontSize:13}}>CSV FORMAT</div>
+              <div>tote_id, store_id, qty</div>
+              <div style={{marginTop:4,opacity:.7}}>TOTE-001, Store A, 24</div>
+              <div style={{opacity:.7}}>TOTE-002, Store B, 12</div>
+            </div>
+
             <div style={{textAlign:"center",color:C.muted,fontSize:12,marginBottom:16,fontFamily:"'Share Tech Mono',monospace"}}>— OR —</div>
 
-            <button className="btn-tap" onClick={()=>loadManifest(
-              [{toteId:"TOTE-001",storeId:"Store A"},{toteId:"TOTE-002",storeId:"Store A"},
-               {toteId:"TOTE-003",storeId:"Store B"},{toteId:"TOTE-004",storeId:"Store B"},
-               {toteId:"TOTE-005",storeId:"Store C"},{toteId:"TOTE-006",storeId:"Store C"},
-               {toteId:"WH-A001",storeId:"Store A"},{toteId:"WH-B001",storeId:"Store B"}],
-              "Demo Manifest","DEMO-001"
-            )} style={{width:"100%",padding:"15px",background:C.panel,
-              border:`1.5px solid ${C.border}`,borderRadius:14,
-              fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:C.navy,
-              marginBottom:16}}>
+            <button className="btn-tap" onClick={()=>loadManifest(DEMO,"Demo Manifest","DEMO-001")}
+              style={{width:"100%",padding:"15px",background:C.panel,
+                border:`1.5px solid ${C.border}`,borderRadius:14,
+                fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:C.navy,marginBottom:16}}>
               LOAD DEMO MANIFEST
             </button>
 
-            {saving&&<div style={{textAlign:"center",color:C.muted,fontFamily:"'Share Tech Mono',monospace",fontSize:11}}>Saving to database…</div>}
+            {saving&&<div style={{textAlign:"center",color:C.muted,fontFamily:"'Share Tech Mono',monospace",fontSize:11,marginBottom:12}}>Saving to database…</div>}
 
             {manifest&&(
-              <div className="pop-in" style={{background:`${C.accent}12`,border:`1.5px solid ${C.accent}`,
-                borderRadius:12,padding:"14px 16px"}}>
-                <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:C.navy,marginBottom:4}}>
-                  ● Manifest Active
+              <div className="pop-in" style={{background:`${C.accent}12`,border:`1.5px solid ${C.accent}`,borderRadius:12,padding:"14px 16px"}}>
+                <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:C.navy,marginBottom:6}}>● Manifest Active</div>
+                <div style={{display:"flex",gap:20}}>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:20,color:C.accent}}>{manifest.length}</div>
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>TOTES</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:20,color:C.accent}}>{allStores.length}</div>
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>STORES</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:20,color:C.accent}}>{totalQty}</div>
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>TOTAL QTY</div>
+                  </div>
                 </div>
-                <div style={{display:"flex",gap:16}}>
-                  <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.accent}}>{manifest.length} totes</span>
-                  <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.accent}}>{allStores.length} stores</span>
+                {/* Tote list with qty */}
+                <div style={{marginTop:12,borderTop:`1px solid ${C.accent}30`,paddingTop:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                    <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,flex:2}}>TOTE ID</span>
+                    <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,flex:2}}>STORE</span>
+                    <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,textAlign:"right",flex:1}}>QTY</span>
+                  </div>
+                  <div style={{maxHeight:160,overflowY:"auto"}}>
+                    {manifest.map(t=>(
+                      <div key={t.toteId} style={{display:"flex",justifyContent:"space-between",
+                        alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.accent}20`}}>
+                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.text,flex:2}}>{t.toteId}</span>
+                        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:600,fontSize:12,
+                          color:gc(t.storeId,allStores),flex:2}}>{t.storeId}</span>
+                        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,
+                          color:C.navy,textAlign:"right",flex:1}}>{t.qty||"—"}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -481,53 +565,60 @@ function App(){
         {(tab==="load"||tab==="offload")&&(
           <div style={{display:"flex",flexDirection:"column",minHeight:"calc(100vh - 200px)"}}>
             {!manifest?(
-              <div style={{textAlign:"center",marginTop:60,color:C.muted,fontFamily:"'Share Tech Mono',monospace",fontSize:11}}>
-                No manifest loaded
-              </div>
+              <div style={{textAlign:"center",marginTop:60,color:C.muted,fontFamily:"'Share Tech Mono',monospace",fontSize:11}}>No manifest loaded</div>
             ):(
               <>
-                {/* Stats card */}
-                <div style={{display:"flex",gap:14,marginBottom:16,background:C.panel,
+                <div style={{display:"flex",gap:14,marginBottom:14,background:C.panel,
                   borderRadius:16,padding:14,border:`1px solid ${C.border}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
-                  <Ring
-                    pct={manifest.length?Math.round(currentSess.scanned.size/manifest.length*100):0}
-                    color={tab==="load"?C.accent:C.amber}
-                    label={manifest.length?Math.round(currentSess.scanned.size/manifest.length*100)+"%":"0%"}
-                    sub={currentSess.scanned.size+"/"+manifest.length}
-                  />
-                  <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",gap:6}}>
-                    <div style={{fontWeight:700,fontSize:18,color:C.navy}}>{tab==="load"?"LOADING":"OFFLOADING"}</div>
+                  {(()=>{
+                    const tQty=manifest.reduce((s,t)=>s+(t.qty||1),0);
+                    const sQty=[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{
+                      const t=manifest.find(x=>x.toteId===id);
+                      return s+Math.min(cnt,t?.qty||cnt);
+                    },0);
+                    const p=tQty?Math.round(sQty/tQty*100):0;
+                    return <Ring pct={p} color={tab==="load"?C.accent:C.amber}
+                      label={p+"%"} sub={sQty+"/"+tQty+" qty"}/>;
+                  })()}
+                  <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",gap:5}}>
+                    <div style={{fontWeight:700,fontSize:17,color:C.navy}}>{tab==="load"?"LOADING":"OFFLOADING"}</div>
                     <div style={{display:"flex",gap:12}}>
                       <div style={{textAlign:"center"}}>
-                        <div style={{fontWeight:700,fontSize:20,color:C.green,fontFamily:"'Rajdhani',sans-serif"}}>{currentSess.scanned.size}</div>
-                        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:8,color:C.muted}}>SCANNED</div>
+                        <div style={{fontWeight:700,fontSize:18,color:C.green,fontFamily:"'Rajdhani',sans-serif"}}>{[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0)}</div>
+                        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:8,color:C.muted}}>TOTES</div>
                       </div>
                       <div style={{textAlign:"center"}}>
-                        <div style={{fontWeight:700,fontSize:20,color:manifest.length-currentSess.scanned.size>0?C.red:C.muted,fontFamily:"'Rajdhani',sans-serif"}}>
-                          {manifest.length-currentSess.scanned.size}
+                        <div style={{fontWeight:700,fontSize:18,
+                          color:(manifest.reduce((s,t)=>s+(t.qty||1),0)-[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0))>0?C.red:C.muted,
+                          fontFamily:"'Rajdhani',sans-serif"}}>
+                          {manifest.reduce((s,t)=>s+(t.qty||1),0)-[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0)}
                         </div>
                         <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:8,color:C.muted}}>MISSING</div>
                       </div>
+                      <div style={{textAlign:"center"}}>
+                        <div style={{fontWeight:700,fontSize:18,color:C.accent,fontFamily:"'Rajdhani',sans-serif"}}>
+                          {[...currentSess.scanned].reduce((s,id)=>s+(toteMap.get(id)?.qty||0),0)}
+                        </div>
+                        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:8,color:C.muted}}>QTY</div>
+                      </div>
                     </div>
-                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
-                      color:currentSess.completed?C.green:C.muted}}>
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:currentSess.completed?C.green:C.muted}}>
                       {currentSess.completed?"✓ COMPLETED":"● IN PROGRESS"}
                     </div>
                   </div>
                 </div>
 
-                {/* Sort card (offload) */}
+                {/* Sort card with qty (offload) */}
                 {tab==="offload"&&oSess.last&&(
-                  <SortCard toteId={oSess.last.id} storeId={oSess.last.store} color={oSess.last.color}/>
+                  <SortCard toteId={oSess.last.id} storeId={oSess.last.store}
+                    qty={oSess.last.qty} count={oSess.last.count||0} color={oSess.last.color}/>
                 )}
 
-                {/* Camera */}
                 {cameraActive&&<div id="reader" style={{borderRadius:12,overflow:"hidden",marginBottom:12,border:`1px solid ${C.border}`}}/>}
 
-                {/* Scan input */}
                 <div className={currentSess.completed?"":"scan-pulse"} style={{
                   background:C.panel,border:`2px solid ${tab==="load"?C.accent:C.amber}`,
-                  borderRadius:14,padding:"11px 14px",display:"flex",gap:10,marginBottom:14,
+                  borderRadius:14,padding:"11px 14px",display:"flex",gap:10,marginBottom:12,
                   boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
                   <input value={scanInput} onChange={e=>setScanInput(e.target.value)}
                     onKeyDown={e=>e.key==="Enter"&&handleScan(tab)}
@@ -541,8 +632,8 @@ function App(){
                     borderRadius:10,fontWeight:700,color:"#fff",fontSize:13,fontFamily:"'Rajdhani',sans-serif"}}>GO</button>
                 </div>
 
-                {/* Log */}
-                <div ref={logRef} style={{flex:1,overflowY:"auto",marginBottom:14,maxHeight:220}}>
+                {/* Log with qty */}
+                <div ref={logRef} style={{flex:1,overflowY:"auto",marginBottom:12,maxHeight:200}}>
                   {currentSess.log.length===0&&(
                     <div style={{textAlign:"center",padding:"20px 0",fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.muted}}>
                       Scan log will appear here
@@ -552,29 +643,33 @@ function App(){
                     <div key={i} style={{display:"flex",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
                       <span style={{fontSize:9,color:C.muted,fontFamily:"'Share Tech Mono',monospace",flexShrink:0,marginTop:2}}>{l.time}</span>
                       <div style={{flex:1}}>
-                        <div style={{fontSize:13,fontFamily:"'Rajdhani',sans-serif",fontWeight:600,
-                          color:l.type==="error"?C.red:l.type==="warn"?C.amber:C.accent}}>{l.msg}</div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:13,fontFamily:"'Rajdhani',sans-serif",fontWeight:600,
+                            color:l.type==="error"?C.red:l.type==="warn"?C.amber:C.accent}}>{l.msg}</span>
+                          {l.qty>0&&<span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,
+                            color:C.navy,background:C.light,padding:"2px 8px",borderRadius:8,flexShrink:0}}>
+                            qty: {l.qty}
+                          </span>}
+                        </div>
                         {l.store&&<div style={{fontSize:10,fontFamily:"'Share Tech Mono',monospace",color:l.color}}>→ {l.store}</div>}
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Complete button */}
                 {!currentSess.completed&&(
                   <button className="btn-tap" onClick={()=>pressComplete(tab)} disabled={saving}
                     style={{width:"100%",padding:"16px",border:"none",borderRadius:14,
                       fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:16,color:"#fff",
-                      background:manifest.length-currentSess.scanned.size>0
+                      background:(manifest.reduce((s,t)=>s+(t.qty||1),0)-[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0))>0
                         ?`linear-gradient(135deg,${C.red},#f97316)`
                         :`linear-gradient(135deg,${C.accent},#00b48c)`,
-                      boxShadow:manifest.length-currentSess.scanned.size>0
-                        ?`0 4px 16px ${C.red}40`
-                        :`0 4px 16px ${C.accent}40`,
+                      boxShadow:(manifest.reduce((s,t)=>s+(t.qty||1),0)-[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0))>0
+                        ?`0 4px 16px ${C.red}40`:`0 4px 16px ${C.accent}40`,
                       opacity:saving?.65:1}}>
                     {saving?"SAVING…"
-                      :manifest.length-currentSess.scanned.size>0
-                        ?`COMPLETE & SEND ALERT  (${manifest.length-currentSess.scanned.size} MISSING)`
+                      :(manifest.reduce((s,t)=>s+(t.qty||1),0)-[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0))>0
+                        ?`COMPLETE & SEND ALERT  (${manifest.reduce((s,t)=>s+(t.qty||1),0)-[...currentSess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0)} MISSING)`
                         :"COMPLETE & SAVE ✓"}
                   </button>
                 )}
@@ -597,86 +692,99 @@ function App(){
               <div style={{textAlign:"center",marginTop:60,color:C.muted,fontFamily:"'Share Tech Mono',monospace",fontSize:11}}>No manifest loaded</div>
             ):(
               <>
-                {/* Load/Offload toggle */}
                 <div className="v-toggle">
                   <button className={verifyMode==="load"?"active":""} onClick={()=>setVerifyMode("load")}>▲ LOAD</button>
                   <button className={verifyMode==="offload"?"active":""} onClick={()=>setVerifyMode("offload")}>▼ OFFLOAD</button>
                 </div>
-
-                {/* Store / Tote view toggle */}
-                <div style={{display:"flex",background:C.light,borderRadius:10,padding:3,
-                  border:`1px solid ${C.border}`,marginBottom:16,gap:3}}>
+                <div style={{display:"flex",background:C.light,borderRadius:10,padding:3,border:`1px solid ${C.border}`,marginBottom:16,gap:3}}>
                   {["store","tote"].map(v=>(
                     <button key={v} onClick={()=>setVerifyView(v)} style={{
                       flex:1,padding:"8px",border:"none",borderRadius:8,
                       background:verifyView===v?C.panel:"transparent",
                       color:verifyView===v?C.navy:C.muted,
                       fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer",
-                      boxShadow:verifyView===v?"0 1px 4px rgba(0,0,0,.08)":"none",
-                      transition:"all .2s"}}>
+                      boxShadow:verifyView===v?"0 1px 4px rgba(0,0,0,.08)":"none",transition:"all .2s"}}>
                       {v==="store"?"BY STORE":"BY TOTE"}
                     </button>
                   ))}
                 </div>
 
-                {/* Overall summary bar */}
+                {/* Summary bar with qty */}
                 <div style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:14,
-                  padding:"12px 16px",marginBottom:16,display:"flex",gap:16,
+                  padding:"12px 16px",marginBottom:16,display:"flex",gap:8,
                   boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
-                  <div style={{textAlign:"center",flex:1}}>
-                    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:24,color:C.green}}>{verifySess.scanned.size}</div>
-                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>SCANNED</div>
-                  </div>
-                  <div style={{width:1,background:C.border}}/>
-                  <div style={{textAlign:"center",flex:1}}>
-                    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:24,
-                      color:manifest.length-verifySess.scanned.size>0?C.red:C.muted}}>
-                      {manifest.length-verifySess.scanned.size}
+                  {[
+                    {l:"TOTES",v:[...verifySess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0)+"/"+manifest.length,c:C.navy},
+                    {l:"MISSING",v:manifest.length-[...verifySess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0),c:manifest.length-[...verifySess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0)>0?C.red:C.muted},
+                    {l:"QTY SCANNED",v:scannedQty,c:C.green},
+                    {l:"QTY MISSING",v:totalQty-scannedQty,c:totalQty-scannedQty>0?C.red:C.muted},
+                  ].map(s=>(
+                    <div key={s.l} style={{textAlign:"center",flex:1}}>
+                      <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:18,color:s.c}}>{s.v}</div>
+                      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:8,color:C.muted,marginTop:1}}>{s.l}</div>
                     </div>
-                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>MISSING</div>
-                  </div>
-                  <div style={{width:1,background:C.border}}/>
-                  <div style={{textAlign:"center",flex:1}}>
-                    <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:24,color:C.navy}}>{manifest.length}</div>
-                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted}}>TOTAL</div>
-                  </div>
+                  ))}
                 </div>
 
-                {/* BY STORE view */}
-                {verifyView==="store"&&(
-                  <div>
-                    {storeVerifyData.map(({store,scanned,missed,total,color})=>(
-                      <StoreVerifyCard key={store} store={store} color={color}
-                        scanned={scanned} missed={missed} total={total}/>
-                    ))}
-                  </div>
-                )}
+                {/* BY STORE */}
+                {verifyView==="store"&&storeVerifyData.map(d=>(
+                  <StoreVerifyCard key={d.store} {...d}/>
+                ))}
 
-                {/* BY TOTE view */}
+                {/* BY TOTE */}
                 {verifyView==="tote"&&(
                   <>
-                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.green,
-                      letterSpacing:2,marginBottom:8}}>SCANNED ({verifySess.scanned.size})</div>
-                    {manifest.filter(t=>verifySess.scanned.has(t.toteId)).map(t=>(
-                      <div key={t.toteId} style={{background:C.panel,padding:"11px 14px",
+                    {/* Header */}
+                    <div style={{display:"flex",padding:"0 14px 8px",gap:4}}>
+                      <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,flex:2}}>TOTE ID</span>
+                      <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,flex:2}}>STORE</span>
+                      <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,textAlign:"center",flex:1}}>QTY</span>
+                      <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,textAlign:"right",flex:1}}>STATUS</span>
+                    </div>
+
+                    {/* Scanned */}
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.green,letterSpacing:2,marginBottom:6}}>
+                      SCANNED ({[...verifySess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0)})
+                    </div>
+                    {manifest.filter(t=>(verifySess.scanned.get(t.toteId)||0)>=(t.qty||1)).map(t=>(
+                      <div key={t.toteId} style={{background:C.panel,padding:"10px 14px",
                         borderRadius:12,border:`1px solid ${C.border}`,marginBottom:6,
-                        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:600,color:C.navy,fontSize:13}}>{t.toteId}</span>
-                        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:600,fontSize:12,
-                          color:gc(t.storeId,allStores),background:`${gc(t.storeId,allStores)}18`,
-                          padding:"2px 10px",borderRadius:20,border:`1px solid ${gc(t.storeId,allStores)}30`}}>
-                          {t.storeId}
+                        display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:C.navy,flex:2}}>{t.toteId}</span>
+                        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:600,fontSize:12,color:gc(t.storeId,allStores),flex:2}}>{t.storeId}</span>
+                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.green,
+                          textAlign:"center",flex:1}}>
+                          {verifySess.scanned.get(t.toteId)||0}/{t.qty||1}
                         </span>
+                        <div style={{flex:1,textAlign:"right"}}>
+                          <span style={{background:`${C.green}15`,border:`1px solid ${C.green}30`,
+                            borderRadius:20,padding:"2px 8px",fontFamily:"'Rajdhani',sans-serif",
+                            fontWeight:700,fontSize:10,color:C.green}}>✓ DONE</span>
+                        </div>
                       </div>
                     ))}
-                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,
-                      letterSpacing:2,marginTop:18,marginBottom:8}}>MISSING ({manifest.length-verifySess.scanned.size})</div>
-                    {manifest.filter(t=>!verifySess.scanned.has(t.toteId)).map(t=>(
-                      <div key={t.toteId} style={{background:"#fff5f5",padding:"11px 14px",
+
+                    {/* Missing */}
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,letterSpacing:2,marginTop:16,marginBottom:6}}>
+                      MISSING ({manifest.length-[...verifySess.scanned.entries()].reduce((s,[id,cnt])=>{const t=manifest.find(x=>x.toteId===id);return s+Math.min(cnt,t?.qty||cnt);},0)})
+                    </div>
+                    {manifest.filter(t=>!(verifySess.scanned.get(t.toteId)||0)>=(t.qty||1)).map(t=>(
+                      <div key={t.toteId} style={{background:"#fff5f5",padding:"10px 14px",
                         borderRadius:12,border:`1px solid ${C.red}25`,marginBottom:6,
-                        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:600,color:C.red,fontSize:13}}>{t.toteId}</span>
-                        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:600,fontSize:12,color:C.muted}}>{t.storeId}</span>
+                        display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:C.red,flex:2}}>{t.toteId}</span>
+                        <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:600,fontSize:12,color:C.muted,flex:2}}>{t.storeId}</span>
+                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,
+                          color:C.red,textAlign:"center",flex:1}}>
+                          {verifySess.scanned.get(t.toteId)||0}/{t.qty||1}
+                        </span>
+                        <div style={{flex:1,textAlign:"right"}}>
+                          <span style={{background:`${C.red}12`,border:`1px solid ${C.red}25`,
+                            borderRadius:20,padding:"2px 8px",fontFamily:"'Rajdhani',sans-serif",
+                            fontWeight:700,fontSize:10,color:C.red}}>
+                            -{(t.qty||1)-(verifySess.scanned.get(t.toteId)||0)}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </>
@@ -697,13 +805,9 @@ function App(){
                 ↻ REFRESH
               </button>
             </div>
-
             {jobs.length===0&&(
-              <div style={{textAlign:"center",marginTop:40,color:C.muted,fontFamily:"'Share Tech Mono',monospace",fontSize:11}}>
-                No jobs recorded yet
-              </div>
+              <div style={{textAlign:"center",marginTop:40,color:C.muted,fontFamily:"'Share Tech Mono',monospace",fontSize:11}}>No jobs recorded yet</div>
             )}
-
             {jobs.map(j=>{
               const totalMissed=(j.load_missed||0)+(j.offload_missed||0);
               return(
@@ -725,9 +829,9 @@ function App(){
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     {[
-                      {l:"LOADED",v:j.load_completed_at?`${j.load_scanned}/${j.total_totes}`:"—",c:C.accent},
-                      {l:"OFFLOADED",v:j.offload_completed_at?`${j.offload_scanned}/${j.total_totes}`:"—",c:C.amber},
-                      {l:"MISSED",v:totalMissed,c:totalMissed>0?C.red:C.green},
+                      {l:"LOADED",    v:j.load_completed_at?`${j.load_scanned}/${j.total_totes}`:"—",c:C.accent},
+                      {l:"OFFLOADED", v:j.offload_completed_at?`${j.offload_scanned}/${j.total_totes}`:"—",c:C.amber},
+                      {l:"MISSED",    v:totalMissed,c:totalMissed>0?C.red:C.green},
                     ].map(s=>(
                       <div key={s.l} style={{flex:1,background:C.light,borderRadius:10,padding:"8px",textAlign:"center"}}>
                         <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:16,color:s.c}}>{s.v}</div>
@@ -735,9 +839,7 @@ function App(){
                       </div>
                     ))}
                   </div>
-                  <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,marginTop:8,textAlign:"right"}}>
-                    TAP FOR DETAIL →
-                  </div>
+                  <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,marginTop:8,textAlign:"right"}}>TAP FOR DETAIL →</div>
                 </div>
               );
             })}
@@ -755,49 +857,45 @@ function App(){
                       style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:10,
                         padding:"6px 12px",fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted}}>CLOSE</button>
                   </div>
-
                   {["load","offload"].map(m=>{
                     const ml=jobDetail.missed?.filter(r=>r.mode===m)||[];
                     const ca=m==="load"?jobDetail.load_completed_at:jobDetail.offload_completed_at;
                     const sc=m==="load"?jobDetail.load_scanned:jobDetail.offload_scanned;
                     const byStore={};
-                    ml.forEach(r=>{if(!byStore[r.store_id])byStore[r.store_id]=[];byStore[r.store_id].push(r.tote_id);});
+                    ml.forEach(r=>{if(!byStore[r.store_id])byStore[r.store_id]=[];byStore[r.store_id].push(r);});
                     return(
                       <div key={m} style={{marginBottom:18}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                           <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
                             color:m==="load"?C.accent:C.amber,letterSpacing:2}}>
                             {m==="load"?"▲ LOADING":"▼ OFFLOADING"}
                           </div>
-                          <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
-                            color:ca?C.green:C.muted}}>
+                          <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:ca?C.green:C.muted}}>
                             {ca?`✓ Saved  ${fmt(ca)}`:"Not completed"}
                           </span>
                         </div>
-                        {ca&&<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,
-                          color:C.muted,marginBottom:8}}>
+                        {ca&&<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:C.muted,marginBottom:8}}>
                           Scanned: {sc} / {jobDetail.total_totes}
                         </div>}
                         {ml.length===0
                           ?<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.green}}>✓ All totes scanned</div>
                           :<div style={{background:"#fff5f5",border:`1px solid ${C.red}20`,borderRadius:12,overflow:"hidden"}}>
-                            <div style={{padding:"8px 12px",borderBottom:`1px solid #fee2e2`,
-                              fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,letterSpacing:2}}>
-                              {ml.length} MISSED TOTES
+                            {/* Header */}
+                            <div style={{display:"flex",padding:"8px 12px",borderBottom:"1px solid #fee2e2",background:"#fef2f2"}}>
+                              <span style={{flex:2,fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red}}>TOTE ID</span>
+                              <span style={{flex:2,fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red}}>STORE</span>
+                              <span style={{flex:1,fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.red,textAlign:"right"}}>QTY</span>
                             </div>
-                            {Object.entries(byStore).map(([store,totes])=>(
-                              <div key={store} style={{padding:"10px 12px",borderBottom:`1px solid #fee2e2`}}>
-                                <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,color:C.navy,marginBottom:4}}>{store}</div>
-                                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                                  {totes.map(tid=>(
-                                    <span key={tid} style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,
-                                      color:C.red,background:`${C.red}10`,padding:"2px 8px",borderRadius:6}}>
-                                      {tid}
-                                    </span>
-                                  ))}
+                            {Object.entries(byStore).map(([store,totes])=>
+                              totes.map((r,i)=>(
+                                <div key={r.id||i} style={{display:"flex",alignItems:"center",
+                                  padding:"8px 12px",borderBottom:"1px solid #fee2e2"}}>
+                                  <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:C.red,flex:2}}>{r.tote_id}</span>
+                                  <span style={{fontFamily:"'Rajdhani',sans-serif",fontSize:12,color:C.navy,flex:2}}>{r.store_id}</span>
+                                  <span style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:C.navy,textAlign:"right",flex:1}}>{r.qty||"—"}</span>
                                 </div>
-                              </div>
-                            ))}
+                              ))
+                            )}
                           </div>
                         }
                       </div>
@@ -810,12 +908,10 @@ function App(){
         )}
       </div>
 
-      {/* Footer */}
       <div style={{textAlign:"center",padding:"4px",background:C.panel,borderTop:`1px solid ${C.border}`}}>
         <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:C.muted,letterSpacing:1}}>MADE BY KIM.JONGWON</span>
       </div>
 
-      {/* Bottom Nav */}
       <div style={{display:"flex",background:C.panel,borderTop:`1px solid ${C.border}`,
         paddingBottom:"calc(8px + env(safe-area-inset-bottom))",paddingTop:4,
         boxShadow:"0 -1px 6px rgba(0,0,0,.06)"}}>
@@ -833,21 +929,14 @@ function App(){
         ))}
       </div>
 
-      {/* Confirmation modal */}
       {confirm&&(
-        <ConfirmModal
-          mode={confirm.mode}
-          scannedCount={confirm.scannedList.length}
-          missedList={confirm.missedList}
-          allStores={allStores}
-          onConfirm={doComplete}
-          onCancel={()=>setConfirm(null)}
-        />
+        <ConfirmModal mode={confirm.mode} scannedCount={confirm.scannedList.length}
+          missedList={confirm.missedList} allStores={allStores}
+          onConfirm={doComplete} onCancel={()=>setConfirm(null)}/>
       )}
     </div>
   );
 }
-
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>

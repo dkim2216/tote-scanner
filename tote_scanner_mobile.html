@@ -217,7 +217,7 @@ const SortCard=({toteId,storeId,route,qty,count,color})=>{
 };
 
 // ── Confirm modal (store complete) ────────────────────────
-const ConfirmModal=({storeId,scannedList,missedList,onConfirm,onCancel})=>{
+const ConfirmModal=({storeId,scannedList,missedList,savedOnce,onSaveAndContinue,onComplete,onCancel})=>{
   const scQty=scannedList.reduce((s,t)=>s+(t.qty||1),0);
   const msQty=missedList.reduce((s,t)=>s+(t.qty||1),0);
   const hasMissed=missedList.length>0;
@@ -270,15 +270,27 @@ const ConfirmModal=({storeId,scannedList,missedList,onConfirm,onCancel})=>{
             ))}
           </div>
         )}
-        <div style={{display:"flex",gap:10}}>
-          <button className="btn-tap" onClick={onCancel} style={{flex:1,
-            background:C.light,border:`1px solid ${C.border}`,borderRadius:14,
-            padding:"13px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,
-            fontSize:14,color:C.muted}}>CANCEL</button>
-          <button className="btn-tap" onClick={onConfirm} style={{flex:2,
-            background:hasMissed?C.red:C.accent,border:"none",borderRadius:14,
-            padding:"13px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,
-            fontSize:14,color:"#fff"}}>SAVE TO DB</button>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {/* Row 1 — Save & Continue (interim) */}
+          <button className="btn-tap" onClick={onSaveAndContinue} style={{
+            width:"100%",background:"linear-gradient(135deg,#0D1B4B,#1a3a7c)",
+            border:"none",borderRadius:14,padding:"13px",
+            fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,color:"#fff"}}>
+            {savedOnce?"🔄  UPDATE & CONTINUE":"💾  SAVE & CONTINUE"}
+          </button>
+          {/* Row 2 — Complete + Cancel */}
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn-tap" onClick={onCancel} style={{flex:1,
+              background:C.light,border:`1px solid ${C.border}`,borderRadius:14,
+              padding:"12px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,
+              fontSize:13,color:C.muted}}>CANCEL</button>
+            <button className="btn-tap" onClick={onComplete} style={{flex:2,
+              background:hasMissed?C.red:C.green,border:"none",borderRadius:14,
+              padding:"12px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,
+              fontSize:13,color:"#fff"}}>
+              {hasMissed?"COMPLETE (MISSING)":"✓ COMPLETE STORE"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -876,8 +888,8 @@ function StoreScanScreen({store,route,storeColor,manifest,session,onScan,onCompl
             fontSize:18,color:C.navy}}>{store}</span>
         </div>
         <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
-          color:session.completed?C.green:C.muted}}>
-          {session.completed?"✓ SAVED":"● SCANNING"}
+          color:session.completed?C.green:session.savedOnce?C.amber:C.muted}}>
+          {session.completed?"✓ COMPLETE":session.savedOnce?"💾 SAVED":"● SCANNING"}
         </span>
       </div>
 
@@ -983,25 +995,31 @@ function StoreScanScreen({store,route,storeColor,manifest,session,onScan,onCompl
               ?`linear-gradient(135deg,${C.red},#f97316)`
               :`linear-gradient(135deg,${C.green},${C.accent})`,
             boxShadow:leftQty>0?`0 4px 16px ${C.red}40`:`0 4px 16px ${C.green}40`}}>
-          {saving?"SAVING…":leftQty>0
-            ?`COMPLETE ${store}  (${leftQty} QTY MISSING)`
-            :`✓ COMPLETE ${store}`}
+          {saving?"SAVING…":session.savedOnce
+            ?leftQty>0?`UPDATE / COMPLETE  (${leftQty} QTY MISSING)`:"UPDATE / COMPLETE ✓"
+            :leftQty>0?`COMPLETE ${store}  (${leftQty} QTY MISSING)`:`✓ COMPLETE ${store}`}
         </button>
       ):(
         <div style={{background:`${C.green}15`,border:`1.5px solid ${C.green}`,
           borderRadius:14,padding:"13px",textAlign:"center",marginBottom:4,
           fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,color:C.green}}>
-          ✓ {store} Saved — Go back to complete {route}
+          ✓ {store} Complete
         </div>
       )}
 
       {confirm&&(
         <ConfirmModal storeId={store}
           scannedList={confirm.scannedList} missedList={confirm.missedList}
-          onConfirm={async()=>{
+          savedOnce={session.savedOnce}
+          onSaveAndContinue={async()=>{
             const{scannedList,missedList}=confirm;
             setConfirm(null);
-            await onComplete(store,scannedList,missedList);
+            await onComplete(store,scannedList,missedList,false); // false = don't mark complete
+          }}
+          onComplete={async()=>{
+            const{scannedList,missedList}=confirm;
+            setConfirm(null);
+            await onComplete(store,scannedList,missedList,true); // true = mark complete
           }}
           onCancel={()=>setConfirm(null)}/>
       )}
@@ -1428,7 +1446,7 @@ function App(){
       setSelectedRoute(null);setSelectedStore(null);return;}
     const stores=[...new Set(totes.map(t=>t.storeId))].sort();
     const sessions={};
-    stores.forEach(s=>{sessions[s]={scanned:new Map(),log:[],completed:false,lastScan:null};});
+    stores.forEach(s=>{sessions[s]={scanned:new Map(),log:[],completed:false,lastScan:null,savedOnce:false};});
     setManifest(totes);setStoreSessions(sessions);
     setSelectedRoute(null);setSelectedStore(null);setManifestNo(no||label);
 
@@ -1471,15 +1489,27 @@ function App(){
     if(!item)showToast(`Not in ${store}`,"error");
   },[manifest]);
 
-  // Complete store (save to DB, no email)
-  const handleComplete=async(store,scannedList,missedList)=>{
+  // Save store progress (markComplete=false = interim save, true = final complete)
+  const handleComplete=async(store,scannedList,missedList,markComplete=true)=>{
     setSaving(true);
     const jobId=jobIds[store];
     if(jobId)await API.completeMode(jobId,"offload",scannedList,missedList);
-    setStoreSessions(prev=>({...prev,[store]:{...prev[store],completed:true}}));
+    setStoreSessions(prev=>({
+      ...prev,
+      [store]:{
+        ...prev[store],
+        savedOnce:true,
+        completed:markComplete,   // only close session if final complete
+      }
+    }));
     setSaving(false);
-    showToast(missedList.length===0?`${store} saved ✓`:`${store} saved · ${missedList.reduce((s,t)=>s+(t.qty||1),0)} qty missing`,
-      missedList.length===0?"ok":"warn");
+    const missedQty=missedList.reduce((s,t)=>s+(t.qty||1),0);
+    if(markComplete){
+      showToast(missedList.length===0?`${store} complete ✓`:`${store} complete · ${missedQty} qty missing`,
+        missedList.length===0?"ok":"warn");
+    }else{
+      showToast(`${store} progress saved — continue scanning`,"ok");
+    }
   };
 
   // Send route report email

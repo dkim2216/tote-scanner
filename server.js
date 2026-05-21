@@ -14,7 +14,7 @@ const path     = require("path");
 
 const app    = express();
 const PORT   = process.env.PORT || 3001;
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend client created lazily inside functions — avoids startup crash when env var not yet set.
 
 // ── Middleware ────────────────────────────────────────────
 app.use(cors({ origin: "*" }));
@@ -274,6 +274,7 @@ async function sendMissedAlert(job, mode, scannedTotes, missedTotes) {
   const xlsxBuffer = generateExcel(job, mode, scannedTotes, missedTotes);
   const filename   = `tote_report_${job.manifest_no.replace(/[^a-zA-Z0-9-]/g,"_")}_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
   const fromAddr   = process.env.RESEND_FROM || "Tote Scanner <onboarding@resend.dev>";
+  const resendClient = new Resend(process.env.RESEND_API_KEY);
 
   console.log(`[EMAIL] Sending to: ${process.env.ADMIN_EMAIL}  from: ${fromAddr}`);
 
